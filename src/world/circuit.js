@@ -354,27 +354,68 @@ export function buildGrandstandHD({ len = 36 } = {}) {
   aisleMesh.receiveShadow = true;
   g.add(concrete, seatMesh, aisleMesh);
 
-  // Cantilevered roof on back columns and trusses.
+  // Cantilevered wing roof: a curved shell that thins toward an upturned front
+  // lip, carried by tapered steel ribs on back columns. Under it: purlins with
+  // downlights; at the front a fascia with a team-colored band and LED strip;
+  // at the back a glass clerestory over the back wall, which gets vertical fins.
   const topY = base + rows * rowH + 3.4;
-  const depth = rows * rowD + 3;
-  const roof = new THREE.Mesh(bevelBox(len + 3, 0.25, depth, 0.06).rotateX(-0.08).translate(0, topY + 0.6, -rows * rowD + depth / 2 - 0.5), mat(PALETTE.canopy, { roughness: 0.4 }));
-  roof.castShadow = true;
-  const truss = [];
-  for (let k = 0; k <= 6; k++) {
-    const x = -len / 2 + (len / 6) * k;
-    const back0 = V(x, 0, -rows * rowD - 0.4);
-    const backTop = V(x, topY + 1.4, -rows * rowD - 0.4);
-    const tip = V(x, topY + 0.35, 2.3);
-    truss.push(rod(back0, backTop, 0.18, 8), rod(backTop, tip, 0.1, 6), rod(backTop.clone().setY(topY - 0.4), tip, 0.08, 6));
-    for (let t = 0.2; t < 1; t += 0.2) {
-      const up = backTop.clone().lerp(tip, t);
-      const lo = backTop.clone().setY(topY - 0.4).lerp(tip, t);
-      truss.push(rod(up, lo, 0.04, 4));
+  const zBack = -rows * rowD - 0.6;
+  const zTip = 3.4;
+  const W = len + 3;
+  const zAt = (u) => zBack + (zTip - zBack) * u;
+  const roofTop = (u) => topY + 1.7 - 1.3 * u + 0.55 * u * u * u;
+  const thick = (u) => 0.55 - 0.4 * u;
+  const under = (u) => roofTop(u) - thick(u);
+  const ribLow = (u) => topY - 0.3 + (under(1) - 0.02 - (topY - 0.3)) * u;
+  // Side profile in (z, y), extruded along x. Shape x is -z so a -90° turn about y maps it back.
+  const profile = (top, bottom, width, x0, n = 24) => {
+    const shape = new THREE.Shape();
+    for (let i = 0; i <= n; i++) {
+      const u = i / n;
+      const pt = [-zAt(u), top(u)];
+      if (i === 0) shape.moveTo(...pt);
+      else shape.lineTo(...pt);
     }
+    for (let i = n; i >= 0; i--) shape.lineTo(-zAt(i / n), bottom(i / n));
+    return new THREE.ExtrudeGeometry(shape, { depth: width, bevelEnabled: false, curveSegments: 1 }).rotateY(Math.PI / 2).translate(x0, 0, 0);
+  };
+  const roof = new THREE.Mesh(profile(roofTop, under, W, -W / 2, 40), mat(PALETTE.canopy, { roughness: 0.4 }));
+  roof.castShadow = roof.receiveShadow = true;
+  const steel = [];
+  const nRibs = 7;
+  for (let k = 0; k < nRibs; k++) {
+    const x = -len / 2 + (len / (nRibs - 1)) * k;
+    steel.push(profile(under, ribLow, 0.28, x - 0.14));
+    // Tapered back column from the ground to the rib heel.
+    const col = new THREE.CylinderGeometry(0.22, 0.32, topY + 1.2, 8).translate(x, (topY + 1.2) / 2, zBack + 0.15);
+    steel.push(col);
+    // Back tie from the column foot of the roof to the ground behind the wall.
+    steel.push(rod(V(x, topY + 1.1, zBack + 0.1), V(x, 0, zBack - 2.6), 0.07, 6));
   }
-  const trussMesh = new THREE.Mesh(merge(truss), mat('#C9CED6', { metalness: 0.6, roughness: 0.35 }));
-  trussMesh.castShadow = true;
-  g.add(roof, trussMesh);
+  // Purlins between the ribs, just under the shell.
+  for (const u of [0.18, 0.38, 0.58, 0.78, 0.94]) {
+    const y = under(u) - 0.12;
+    steel.push(bevelBox(W - 0.4, 0.16, 0.12, 0.02).translate(0, y, zAt(u)));
+  }
+  const steelMesh = new THREE.Mesh(merge(steel), mat('#B9C0C9', { metalness: 0.55, roughness: 0.35 }));
+  steelMesh.castShadow = true;
+  // Fascia along the front lip: team band and a thin LED strip.
+  const lipY = roofTop(1);
+  const fascia = new THREE.Mesh(bevelBox(W + 0.1, 0.42, 0.18, 0.04).translate(0, lipY - 0.12, zTip + 0.05), mat(TEAMS[0].primary, { roughness: 0.4 }));
+  const led = new THREE.Mesh(new THREE.BoxGeometry(W - 0.6, 0.05, 0.05).translate(0, lipY - 0.36, zTip + 0.1), new THREE.MeshStandardMaterial({ color: '#ffffff', emissive: '#ffffff', emissiveIntensity: 1.2 }));
+  // Downlights along the purlins.
+  const lights = [];
+  for (const u of [0.38, 0.78]) for (let x = -len / 2 + 2; x <= len / 2 - 2; x += 3) lights.push(new THREE.CylinderGeometry(0.14, 0.14, 0.05, 10).translate(x, under(u) - 0.22, zAt(u)));
+  const lightMesh = new THREE.Mesh(merge(lights), new THREE.MeshStandardMaterial({ color: '#fff8e8', emissive: '#fff4d6', emissiveIntensity: 1.4 }));
+  // Glass clerestory between the back wall top and the roof heel.
+  const glassH = under(0) - topY;
+  const glass = new THREE.Mesh(new THREE.BoxGeometry(len + 0.6, glassH, 0.06).translate(0, topY + glassH / 2, zBack + 0.5), new THREE.MeshPhysicalMaterial({ color: '#bfe3f7', roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.45 }));
+  // Vertical fins on the back wall.
+  const fins = [];
+  for (let x = -len / 2; x <= len / 2 + 0.01; x += 1.5) fins.push(bevelBox(0.16, topY - 0.6, 0.5, 0.03).translate(x, (topY - 0.6) / 2 + 0.3, zBack + 0.05 - 0.25));
+  const finMesh = new THREE.Mesh(merge(fins), mat('#E9E7E1', { roughness: 0.6 }));
+  finMesh.castShadow = true;
+  g.add(roof, steelMesh, fascia, led, lightMesh, glass, finMesh);
 
   // Video screen on legs at the end of the stand.
   const screenTex = textTexture(['SKY CIRCUIT', 'LIVE'], { w: 512, h: 256, bg: '#0E1B2B', fg: '#F4F5F7' });

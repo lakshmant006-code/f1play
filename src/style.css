@@ -54,8 +54,8 @@ button[aria-pressed='true'] { background: #2d7ff9; color: #fff; border-color: #2
 
 .panel { background: var(--paper); border-radius: var(--radius); box-shadow: var(--shadow); backdrop-filter: blur(8px); }
 .card {
-  position: absolute; left: 16px; bottom: max(16px, env(safe-area-inset-bottom)); width: min(380px, calc(100vw - 32px));
-  padding: 16px 18px 14px; border-top: 6px solid var(--accent); max-height: calc(100vh - 120px); overflow: auto;
+  position: absolute; right: 16px; top: 76px; width: min(380px, calc(100vw - 32px));
+  padding: 16px 18px 14px; border-top: 6px solid var(--accent); max-height: calc(100vh - 170px); overflow: auto;
 }
 .card .kicker { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-2); }
 .card h2 { margin: 2px 0 8px; font-size: 22px; font-weight: 900; }
@@ -127,7 +127,16 @@ button[aria-pressed='true'] { background: #2d7ff9; color: #fff; border-color: #2
 .view-ctl button { min-width: 40px; padding: 8px 10px; }
 
 /* Walk mode HUD, place picker and touch joystick. */
-.walk-hud { position: absolute; left: 16px; bottom: max(16px, env(safe-area-inset-bottom)); width: min(360px, calc(100vw - 32px)); padding: 14px 16px; border-top: 6px solid #F5C518; }
+.walk-hud { position: absolute; right: 16px; top: 76px; width: min(360px, calc(100vw - 32px)); max-height: calc(100vh - 170px); overflow: auto; padding: 14px 16px; border-top: 6px solid #F5C518; }
+/* Glass panels for the info card and the walk panel: frosted, see-through,
+   with a bright rim and a soft inner highlight. */
+.card.panel, .walk-hud.panel {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.28));
+  -webkit-backdrop-filter: blur(18px) saturate(170%);
+  backdrop-filter: blur(18px) saturate(170%);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 12px 34px rgba(14, 27, 43, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.75);
+}
 .walk-hud .kicker { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-2); }
 .walk-hud h2 { margin: 2px 0 4px; font-size: 20px; font-weight: 900; }
 .walk-hud .walk-help { margin: 0 0 8px; font-size: 13px; color: var(--ink-2); }
