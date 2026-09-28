@@ -56,11 +56,11 @@ function buildSteeringWheel(team) {
   }
   // Screen texture (updated by the drive loop).
   const canvas = document.createElement('canvas');
-  canvas.width = 256;
-  canvas.height = 128;
+  canvas.width = 512;
+  canvas.height = 256;
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
-  const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.12, 0.06), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }));
+  const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.17, 0.085), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }));
   // Screen, LEDs and buttons face the driver (-Z); paddles sit behind (+Z).
   screen.position.set(0, 0.012, -0.024); // clear of the wheel face so it never z-fights
   screen.rotation.y = Math.PI;
@@ -78,7 +78,7 @@ function buildSteeringWheel(team) {
   const colors = ['#E03A3A', '#F5C518', '#2D7FF9', '#35B04A', '#ffffff', '#F26B1D'];
   colors.forEach((c, i) => {
     const b = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.008, 10).rotateX(Math.PI / 2), new THREE.MeshStandardMaterial({ color: c, roughness: 0.4 }));
-    b.position.set((i % 2 ? 1 : -1) * (0.085 + Math.floor(i / 2) * 0.001), -0.035 + Math.floor(i / 2) * 0.022, -0.024);
+    b.position.set((i % 2 ? 1 : -1) * 0.112, -0.038 + Math.floor(i / 2) * 0.024, -0.024);
     buttons.push(b);
   });
   g.add(body, top, screen, ...grips, ...buttons);
@@ -617,24 +617,48 @@ export class PlayerDrive {
     if (this.wheel && this.time - (this.screenAt ?? -1) > 0.1) {
       this.screenAt = this.time;
       const { canvas, tex, leds } = this.wheel.userData;
+      // The wheel screen is the dash: speed, gear, lap, last / best, DRS and
+      // drift. The cockpit rim hides the lower part of the wheel from the
+      // driver's eye, so everything sits in the top half.
       const ctx = canvas.getContext('2d');
+      const W = 512;
+      const H = 256;
       ctx.fillStyle = '#05070a';
-      ctx.fillRect(0, 0, 256, 128);
+      ctx.fillRect(0, 0, W, H);
+      ctx.textBaseline = 'alphabetic';
+      const chip = (x, w, label, bg, fg) => {
+        ctx.fillStyle = bg;
+        ctx.beginPath();
+        ctx.roundRect(x, 6, w, 34, 8);
+        ctx.fill();
+        ctx.fillStyle = fg;
+        ctx.textAlign = 'center';
+        ctx.font = '900 24px Nunito, Arial, sans-serif';
+        ctx.fillText(label, x + w / 2, 32);
+      };
+      const drsAvail = this.drsEl?.classList.contains('avail');
+      chip(12, 100, 'DRS', this.drs ? '#35d45a' : drsAvail ? '#F5C518' : '#2a2d33', this.drs || drsAvail ? '#05070a' : '#6b7079');
+      const beta = Math.abs(Math.atan2(this.vy || 0, Math.max(1, Math.abs(this.v))));
+      const drifting = beta > deg(7) && Math.abs(this.v) > 6;
+      chip(W - 182, 170, drifting ? `DRIFT ${Math.round((beta * 180) / Math.PI)}°` : 'DRIFT', drifting ? '#ff7ac8' : '#2a2d33', drifting ? '#05070a' : '#6b7079');
       ctx.fillStyle = '#F4F5F7';
       ctx.textAlign = 'center';
-      ctx.font = '900 76px Nunito, Arial, sans-serif';
-      ctx.fillText(gear, 128, 88);
-      ctx.font = '800 26px Nunito, Arial, sans-serif';
+      ctx.font = '900 112px Nunito, Arial, sans-serif';
+      ctx.fillText(gear, W / 2, 128);
       ctx.textAlign = 'left';
-      ctx.fillText(String(kmh), 12, 36);
+      ctx.font = '900 54px Nunito, Arial, sans-serif';
+      ctx.fillText(String(kmh), 14, 98);
+      ctx.font = '800 20px Nunito, Arial, sans-serif';
+      ctx.fillStyle = '#9aa3ad';
+      ctx.fillText('KM/H', 16, 124);
       ctx.textAlign = 'right';
-      ctx.fillText(this.lapStart === null ? 'OUT' : this.lapTime.toFixed(1), 244, 36);
-      ctx.fillStyle = this.drs ? '#35d45a' : '#555';
-      ctx.fillRect(12, 96, 60, 22);
-      ctx.fillStyle = '#05070a';
-      ctx.font = '900 18px Nunito, Arial, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('DRS', 42, 113);
+      ctx.fillStyle = '#F4F5F7';
+      ctx.font = '900 40px Nunito, Arial, sans-serif';
+      ctx.fillText(this.lapStart === null ? 'OUT' : this.lapTime.toFixed(2), W - 14, 92);
+      ctx.font = '800 20px Nunito, Arial, sans-serif';
+      ctx.fillStyle = '#9aa3ad';
+      ctx.fillText(`BEST ${this.bestLap ? this.bestLap.time.toFixed(2) : '--.--'}`, W - 14, 124);
+      ctx.fillText(`LAST ${this.lastLap ? this.lastLap.toFixed(2) : '--.--'}`, W - 14, 152);
       tex.needsUpdate = true;
       leds.forEach((l, i) => l.material.color.set(i < lit ? (i < 5 ? '#35d45a' : i < 10 ? '#ff3b30' : '#4a7dff') : '#222'));
     }

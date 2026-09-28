@@ -77,3 +77,17 @@ describe('grade', () => {
     expect(grade(3.5).label).toBe('Slow stop');
   });
 });
+
+describe('PitStopRun in any order', () => {
+  it('accepts the corners in any order and ignores repeats', () => {
+    const run = new PitStopRun(['FL', 'FR', 'RL', 'RR'], PIT, { anyOrder: true });
+    expect(run.tap('RR', 0.1)).toBe('ok');
+    expect(run.tap('RR', 0.2)).toBe('repeat');
+    expect(run.tap('FL', 0.3)).toBe('ok');
+    expect(run.tap('RL', 0.4)).toBe('ok');
+    expect(run.tap('FR', 0.5)).toBe('ok');
+    expect(run.fumbles).toBe(0);
+    expect(run.order).toEqual(['RR', 'FL', 'RL', 'FR']);
+    expect(run.releaseTime).toBeCloseTo(0.5 + PIT.cornerDuration + PIT.jackDrop + PIT.releaseDelay);
+  });
+});

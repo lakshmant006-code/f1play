@@ -1,9 +1,11 @@
-// Pit stop challenge: the team's car boxes, the player taps each corner in the
-// shown order, crew play their beats, jacks drop and the release light goes
-// green. Beat 2.4 s.
+// Pit stop challenge, kept simple: the team's car rolls straight into its box
+// (no waiting for an in-lap), the player taps the four wheels on a fixed pad in
+// any order (or presses Space), crew play their beats, jacks drop and the
+// release light goes green. Beat 2.4 s. The result shows in the HUD with a
+// one-tap "Go again", no pop-up.
 
 import * as THREE from 'three';
-import { PitStopRun, shuffledOrder, grade } from './pitstopRules.js';
+import { PitStopRun, grade } from './pitstopRules.js';
 import { pitStations } from './paddock.js';
 import { PIT, CORNERS, COMPOUNDS } from '../data.js';
 import { h } from '../ui/ui.js';
@@ -39,14 +41,12 @@ export class PitChallenge {
     const g = this.game;
     if (this.active) return;
     const car = team.trackCar;
-    if (!car?.drive || car.drive.mode !== 'track') {
-      g.ui.toast('The car is not on track right now. Try again in a moment.', { icon: '⏳' });
-      return;
-    }
+    if (!car?.drive) return;
     this.active = true;
+    this.aborted = false;
     this.team = team;
     this.car = car;
-    this.run = new PitStopRun(shuffledOrder());
+    this.run = new PitStopRun(CORNERS, PIT, { anyOrder: true });
     this.t = 0;
     this.phase = 'inlap';
     this.nextCompound = g.nextCompound[team.data.id] || 'soft';
@@ -61,70 +61,111 @@ export class PitChallenge {
       team.crew[key].walkTo(st.pos, st.heading, { clip: st.clip, run: true });
     }
 
-    car.drive.pace = 1.45;
-    car.drive.requestPit(team.gx, () => this.onBoxed());
+    // Skip the in-lap: behind a quick fade the car is put in the pit lane a
+    // short run before its box, already at the pit limiter.
+    const d = car.drive;
+    this.fade(() => {
+      for (const c of CORNERS) car.wheels[c].position.set(0, 0, 0);
+      car.lift(0);
+      d.requestPit(team.gx, () => this.onBoxed());
+      d.mode = 'pit';
+      d.pace = 1;
+      d.s = Math.max(0, d.boxS - 26);
+      d.v = 11;
+      d.place();
+    });
     g.focusBox(team);
-    g.ui.toast(`<b>${team.data.name}:</b> Box, box. Car #${car.number} is on its in-lap on ${COMPOUNDS[this.nextCompound].name.toLowerCase()}s next.`, { icon: '🎧', accent: team.data.primary, duration: 4200 });
+    g.ui.toast(`<b>${team.data.name}:</b> Box, box! Tap all four wheels as fast as you can.`, { icon: '🎧', accent: team.data.primary, duration: 2600 });
     this.buildHud();
   }
 
+  // Quick fade to white and back (post grade pass), running `mid` at the
+  // peak. Stepped from update() so it follows game time.
+  fade(mid) {
+    this.fading = { t: 0, mid, done: false };
+  }
+
+  stepFade(dt) {
+    const f = this.fading;
+    if (!f) return;
+    f.t += Math.min(dt, 1 / 30);
+    const u = this.game.post?.grade?.uniforms?.fade;
+    if (u) u.value = f.t < 0.18 ? f.t / 0.18 : Math.max(0, 1 - (f.t - 0.18) / 0.3);
+    if (f.t >= 0.18 && !f.done) {
+      f.done = true;
+      f.mid();
+    }
+    if (f.t >= 0.48) {
+      if (u) u.value = 0;
+      this.fading = null;
+    }
+  }
+
+  // Fixed pad at the bottom: a timer, and four wheel buttons laid out like the
+  // car seen from above (front at the top). Keyboard: Space taps the next wheel.
   buildHud() {
     const g = this.game;
     const hud = g.ui.hud;
     this.timeEl = h('div', { class: 'time', 'aria-live': 'off' }, '0.00');
-    this.orderEl = h('div', { class: 'order', 'aria-label': 'Corner order' }, this.run.order.map((c, i) => h('span', { 'data-c': c }, `${i + 1}·${c}`)));
-    this.metaEl = h('div', { class: 'meta' }, 'Car on its in-lap…');
-    hud.replaceChildren(this.timeEl, h('div', {}, this.orderEl, this.metaEl), h('button', { onclick: () => this.abort(), 'aria-label': 'Quit the pit stop challenge' }, 'Quit'));
+    this.metaEl = h('div', { class: 'meta' }, 'Car coming in…');
+    this.wheelBtns = {};
+    const wheel = (c) => {
+      const b = h('button', { class: 'pit-wheel', 'aria-label': `${CORNER_NAME[c]} wheel`, disabled: true }, c);
+      // Pointer down for instant response on touch; click covers keyboard activation.
+      b.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        this.tap(c);
+      });
+      b.addEventListener('click', (e) => {
+        if (e.detail === 0) this.tap(c);
+      });
+      this.wheelBtns[c] = b;
+      return b;
+    };
+    const pad = h('div', { class: 'pit-pad', role: 'group', 'aria-label': 'Wheels, front at the top' }, wheel('FL'), h('div', { class: 'pit-car', 'aria-hidden': 'true' }), wheel('FR'), wheel('RL'), h('div', { class: 'pit-car rear', 'aria-hidden': 'true' }), wheel('RR'));
+    hud.replaceChildren(h('div', { class: 'pit-body' }, this.timeEl, this.metaEl), pad, h('button', { class: 'pit-quit', onclick: () => this.abort(), 'aria-label': 'Quit the pit stop challenge' }, '✕'));
+    hud.classList.add('pit');
+    hud.classList.remove('result');
     hud.hidden = false;
-    // Corner markers follow the wheels on screen.
     g.ui.markers.replaceChildren();
     this.markers = {};
-    this.run.order.forEach((c, i) => {
-      const b = h('button', { class: 'marker', 'aria-label': `${CORNER_NAME[c]} wheel, tap ${i + 1} of 4`, onclick: () => this.tap(c) }, String(i + 1), h('small', {}, c));
-      b.hidden = true;
-      g.ui.markers.append(b);
-      this.markers[c] = b;
-    });
-    this.refreshOrder();
+    if (!this.keyHandler) {
+      this.keyHandler = (e) => {
+        if (!this.active || e.repeat || (e.key !== ' ' && e.key !== 'Enter')) return;
+        if (e.target?.closest?.('.pit-quit')) return;
+        e.preventDefault();
+        const next = CORNERS.find((c) => this.run.cornerStart[c] === undefined);
+        if (next) this.tap(next);
+      };
+      window.addEventListener('keydown', this.keyHandler);
+    }
   }
 
   refreshOrder() {
-    const next = this.run.expected;
-    for (const span of this.orderEl.children) {
-      const c = span.dataset.c;
-      span.className = this.run.cornerStart[c] !== undefined ? 'done' : c === next ? 'next' : '';
-    }
-    for (const [c, b] of Object.entries(this.markers)) {
+    for (const c of CORNERS) {
+      const b = this.wheelBtns?.[c];
+      if (!b) continue;
+      b.disabled = this.phase !== 'running' || this.run.cornerStart[c] !== undefined;
       b.classList.toggle('done', this.run.cornerStart[c] !== undefined);
-      b.classList.toggle('next', c === next && this.phase === 'running');
     }
   }
 
   onBoxed() {
     this.phase = 'running';
     this.t = 0;
-    this.metaEl.textContent = `Tap the corners in order. Target ${PIT.target.toFixed(1)} s`;
+    this.metaEl.textContent = `GO! Tap all four · target ${PIT.target.toFixed(1)} s`;
+    const hud = this.game.ui.hud;
+    hud.classList.add('go');
+    setTimeout(() => hud.classList.remove('go'), 450);
     this.refreshOrder();
-    this.markers[this.run.expected]?.focus({ preventScroll: true });
   }
 
   tap(corner) {
-    if (!this.active) return;
-    if (this.phase !== 'running') {
-      this.game.ui.toast('Wait for the car to stop on its marks!', { icon: '✋', duration: 1500 });
-      return;
-    }
-    const r = this.run.tap(corner, this.t);
-    const b = this.markers[corner];
-    if (r === 'wrong') {
-      b.classList.remove('wrong');
-      void b.offsetWidth;
-      b.classList.add('wrong');
-      this.metaEl.textContent = `Wrong corner! Next is ${CORNER_NAME[this.run.expected]} (+${PIT.wrongTapPenalty}s fumble)`;
-    } else if (r === 'ok') {
-      this.metaEl.textContent = this.run.allTapped ? 'Guns on… jacks down…' : `Next: ${CORNER_NAME[this.run.expected]}`;
-      const nb = this.markers[this.run.expected];
-      nb?.focus({ preventScroll: true });
+    if (!this.active || this.phase !== 'running') return;
+    if (this.run.tap(corner, this.t) === 'ok') {
+      navigator.vibrate?.(10);
+      const left = CORNERS.filter((c) => this.run.cornerStart[c] === undefined).length;
+      this.metaEl.textContent = left ? `${left} to go` : 'Guns on… jacks down…';
     }
     this.refreshOrder();
   }
@@ -136,18 +177,24 @@ export class PitChallenge {
       for (const c of this.run.order) if (this.run.cornerStart[c] === undefined) this.run.tap(c, this.t);
     }
     if (this.phase === 'inlap') {
-      this.car.drive.pitRequest = null;
-      this.car.drive.pace = 1;
+      // Let the car finish rolling in and leave straight away.
+      const d = this.car.drive;
+      if (d.pitRequest) d.pitRequest.onBoxed = () => d.release();
       this.finishCrew();
       this.cleanup();
+      return;
     }
     this.aborted = true;
   }
 
-  cleanup() {
+  cleanup({ keepHud = false } = {}) {
     this.active = false;
     this.phase = 'idle';
-    this.game.ui.hud.hidden = true;
+    const hud = this.game.ui.hud;
+    if (!keepHud) {
+      hud.hidden = true;
+      hud.classList.remove('pit', 'result');
+    }
     this.game.ui.markers.replaceChildren();
     this.markers = {};
   }
@@ -155,6 +202,7 @@ export class PitChallenge {
   finishCrew() {
     const team = this.team;
     this.game.after(0.9, () => {
+      if (this.active) return; // a new stop already sent them back out
       for (const a of team.pitCrew) a.goHome({ clip: 'idle_loop' });
       this.game.after(2.5, () => {
         if (!this.active) team.jackF.visible = team.jackR.visible = team.releaseBox.visible = false;
@@ -163,32 +211,13 @@ export class PitChallenge {
   }
 
   update(dt) {
+    this.stepFade(dt);
     if (!this.active) return;
-    const g = this.game;
     const car = this.car;
     const team = this.team;
 
-    // Place markers over the wheels.
-    const v = new THREE.Vector3();
-    const showMarkers = this.phase === 'running' || (this.phase === 'inlap' && car.drive.mode === 'pit');
-    for (const [c, b] of Object.entries(this.markers)) {
-      const done = this.run.cornerStart[c] !== undefined;
-      b.hidden = !showMarkers || (done && this.phase !== 'running');
-      if (b.hidden) continue;
-      car.wheels[c].getWorldPosition(v);
-      v.y += 0.9;
-      const s = g.toScreen(v);
-      b.style.transform = `translate(${s.x}px, ${s.y}px)`;
-    }
-
     if (this.phase === 'inlap') {
-      const d = car.drive;
-      if (d.mode === 'track') {
-        const toEntry = (d.pit.sIn - d.s + d.track.length) % d.track.length;
-        this.metaEl.textContent = `In-lap: ${Math.ceil(toEntry / Math.max(d.v, 1))} s to pit entry`;
-      } else if (d.mode === 'pit') {
-        this.metaEl.textContent = 'Pit lane: get ready…';
-      }
+      if (car.drive.mode === 'pit') this.metaEl.textContent = 'Car coming in… get ready';
       return;
     }
 
@@ -265,7 +294,7 @@ export class PitChallenge {
     this.finishCrew();
     const aborted = this.aborted;
     this.aborted = false;
-    this.cleanup();
+    this.cleanup({ keepHud: !aborted });
     if (aborted) return;
 
     const best = loadBest();
@@ -274,30 +303,33 @@ export class PitChallenge {
     if (isBest) saveBest(result);
     this.lastResult = result;
     g.onPitResult?.(result);
-    setTimeout(() => this.showResult(result, isBest ? null : best), 700);
+    this.showResult(result, isBest ? null : best);
   }
 
+  // Result right in the HUD: time, grade, best, and a one-tap Go again.
   showResult(result, best) {
     const g = this.game;
+    const hud = g.ui.hud;
     const gr = grade(result.time);
     const delta = result.time - PIT.target;
-    const content = h(
-      'div',
-      {},
-      h('div', { class: 'kicker' }, `${result.teamName} · Car #${result.number}`),
-      h('h2', {}, gr.label),
-      h('div', { class: 'big' }, `${result.time.toFixed(2)} s`),
-      h('p', {}, `${delta < 0 ? '' : '+'}${delta.toFixed(2)} s against the ${PIT.target.toFixed(1)} s target${result.fumbles ? ` · ${result.fumbles} fumble${result.fumbles > 1 ? 's' : ''}` : ''}.`),
-      h('p', {}, best ? `Your best: ${best.time.toFixed(2)} s` : 'New personal best!'),
+    hud.classList.add('pit', 'result');
+    hud.replaceChildren(
       h(
         'div',
-        { class: 'row' },
-        h('button', { class: 'primary', onclick: () => { g.ui.closeModal(); this.start(this.team); } }, 'Run it again'),
-        h('button', { onclick: () => this.shareCard(result) }, 'Share card'),
-        h('button', { onclick: () => { g.ui.closeModal(); g.goHome(); } }, 'Back to island')
+        { class: 'pit-body' },
+        h('div', { class: 'time' }, `${result.time.toFixed(2)}s`),
+        h('div', { class: 'meta' }, h('b', {}, gr.label), ` · ${delta < 0 ? '' : '+'}${delta.toFixed(2)} s vs ${PIT.target.toFixed(1)} s`, h('br'), best ? `Best ${best.time.toFixed(2)} s` : '★ New personal best!')
+      ),
+      h(
+        'div',
+        { class: 'pit-actions' },
+        h('button', { class: 'primary', onclick: () => this.start(this.team) }, '↻ Go again'),
+        h('button', { onclick: () => this.shareCard(result) }, 'Share'),
+        h('button', { onclick: () => { hud.hidden = true; hud.classList.remove('pit', 'result'); g.goHome(); } }, 'Done')
       )
     );
-    g.ui.openModal(content);
+    hud.hidden = false;
+    hud.querySelector('button.primary')?.focus({ preventScroll: true });
   }
 
   async shareCard(result) {
