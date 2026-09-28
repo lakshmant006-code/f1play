@@ -254,3 +254,10 @@ body.touch-drive .drive-hud { z-index: 2; }
 .sty-opts button[aria-checked='true'] { background: var(--ink); color: #fff; border-color: var(--ink); }
 .sty-opts .sty-swatch { width: 22px; height: 22px; padding: 0; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px var(--line); }
 .sty-opts .sty-swatch[aria-checked='true'] { box-shadow: 0 0 0 3px var(--ink); }
+/* Phones in the cockpit: the wheel screen is the dash, so the overlay shrinks
+   to two small buttons in the top-right corner. In the other cameras it is a
+   slim bar at the top. */
+body.touch-drive .drive-hud.compact { left: auto; right: max(10px, env(safe-area-inset-right)); top: max(8px, env(safe-area-inset-top)); transform: none; padding: 6px; border-radius: 999px; background: rgba(8, 11, 16, 0.45); }
+body.touch-drive .drive-hud.compact .d-rev, body.touch-drive .drive-hud.compact .d-row { display: none; }
+body.touch-drive .drive-hud.compact .d-actions { margin: 0; }
+body.touch-drive .drive-hud:not(.compact) { transform: translateX(-50%) scale(0.7); }

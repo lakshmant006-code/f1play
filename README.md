@@ -80,7 +80,9 @@ Covers build-order steps 1 to 3 and most of 4 and 5 from the spec:
     Shift/X handbrake, Esc to leave. Phones drive in landscape only, with
     slightly see-through L / R buttons on the left, GAS and BRAKE with a
     DRIFT button on the right and a DRS bar at the bottom (it lights when DRS
-    is available); the dash moves to the top. In portrait a note asks you to
+    is available). In the cockpit the steering wheel screen is the dash (speed,
+    gear, lap, best and last, DRS and drift), so only Camera and Leave stay on
+    screen; the other cameras show a slim bar at the top. In portrait a note asks you to
     turn the phone, and the game tries to lock landscape.
 - **Pit wall**: four team decks side by side between the pit wall and the pit
   lane, with the race engineer, team principal, strategist and data engineers
