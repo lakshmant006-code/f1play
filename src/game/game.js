@@ -4,8 +4,10 @@
 // out, celebrate on the podium.
 
 import * as THREE from 'three';
-import { buildIsland, outlineAround, buildTrackMeshes, buildPitBuilding, buildGrandstand, buildPodium, scatterTrees, buildClouds, buildSky, rng } from '../world/world.js';
-import { buildTrack, buildPitLane, GARAGE_X, PIT_Z, GARAGE_FRONT_Z, GARAGE_DEPTH } from './layout.js';
+import { buildTrackMeshes, buildPitBuilding, buildClouds, buildSky } from '../world/world.js';
+import { buildRaisedPodium, PODIUM_HEIGHT } from '../world/podium.js';
+import { buildIslandShapes, buildIslands, buildBridges, buildGrandstandHD, buildWatchTower, buildStartGantry, buildTrackBoards, LANDMARKS } from '../world/circuit.js';
+import { buildTrack, buildPitLane, PIT_WIDTH, GARAGE_FRONT_Z, GARAGE_DEPTH } from './layout.js';
 import { buildTeams } from './paddock.js';
 import { CarDriver } from './driving.js';
 import { PitChallenge, loadBest } from './pitstop.js';
@@ -13,9 +15,11 @@ import { Interactions } from '../interact.js';
 import { Particles, Rain } from '../fx/particles.js';
 import { createPerson, SKIN, HAIR, attachProp, setHelmet } from '../people/person.js';
 import { Actor } from '../people/actor.js';
-import { bevelBox, merge, rod } from '../geo.js';
-import { COMPOUNDS, DRIVERS, TEAMS, teamById, driverByNumber, surname, PALETTE, PIT } from '../data.js';
+import { COMPOUNDS, DRIVERS, teamById, driverByNumber, surname, PIT } from '../data.js';
 import { h } from '../ui/ui.js';
+import { Explorer, PLACES } from '../explore.js';
+import { SoundScape } from '../audio.js';
+import { PlayerDrive } from '../drive.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const deg = THREE.MathUtils.degToRad;
@@ -60,9 +64,12 @@ export class Game {
       dom: renderer.domElement,
       post,
       onHover: (e, source) => this.onHover(e, source),
-      onEscape: () => (this.ui.modal.hidden ? this.goHome() : this.ui.closeModal()),
+      onEscape: () => (this.explorer.active || this.player.active ? null : this.ui.modal.hidden ? this.goHome() : this.ui.closeModal()),
     });
     this.registerInteractions();
+    this.explorer = new Explorer(this);
+    this.audio = new SoundScape(this);
+    this.player = new PlayerDrive(this);
     this.bindUI();
   }
 
@@ -73,94 +80,59 @@ export class Game {
     this.track = buildTrack();
     this.pit = buildPitLane(this.track);
 
-    // Main island outline covers track, pit building and grandstand.
-    const cover = [...this.track.pos.filter((_, i) => i % 6 === 0)];
-    for (let x = -40; x <= 40; x += 8) cover.push(V(x, 0, GARAGE_FRONT_Z - GARAGE_DEPTH - 4));
-    const center = V(2, 0, -2);
-    this.islandOutline = outlineAround(center, cover, 20);
-    const island = buildIsland(this.islandOutline, { depth: 48, seed: 3 });
-    s.add(island);
-    s.add(buildTrackMeshes(this.track, this.pit));
+    // Four islands carved around the track, joined by track bridges.
+    const L = LANDMARKS;
+    const pitLaneExtras = [];
+    for (let i = 0; i < this.pit.n; i += 3) pitLaneExtras.push({ shape: 'circle', x: this.pit.pos[i].x, z: this.pit.pos[i].z, r: PIT_WIDTH / 2 + 5, island: 0 });
+    const extras = [
+      { shape: 'rect', x0: -44, x1: 44, z0: GARAGE_FRONT_Z - GARAGE_DEPTH - 6, z1: -40, island: 0 },
+      ...pitLaneExtras,
+      { shape: 'rect', x0: L.grandstand.x - L.grandstand.len / 2 - 3, x1: L.grandstand.x + L.grandstand.len / 2 + 9, z0: L.grandstand.z - 15, z1: L.grandstand.z + 5, island: 1 },
+      { shape: 'circle', x: L.tower.x, z: L.tower.z, r: 13, island: 2 },
+      { shape: 'rect', x0: L.podium.x - 14, x1: -67, z0: L.podium.z - 15, z1: L.podium.z + 15, island: 3 },
+    ];
+    const shapes = buildIslandShapes(this.track, this.pit, extras);
+    this.onIsland = shapes.onIsland;
+    this.islands = buildIslands(shapes.outlines);
+    s.add(this.islands);
+    s.add(buildTrackMeshes(this.track, this.pit, this.onIsland));
+    s.add(buildBridges(this.track, this.onIsland));
     s.add(buildPitBuilding());
-    this.grandstand = buildGrandstand();
-    this.grandstand.position.set(0, 0, -21);
-    this.grandstand.rotation.y = Math.PI;
+    s.add(buildStartGantry(-10, -35));
+    s.add(buildTrackBoards(this.track, [[20, 110, 1], [190, 225, -1], [270, 305, 1], [345, 380, -1]], this.onIsland));
+
+    this.grandstand = buildGrandstandHD({ len: L.grandstand.len });
+    this.grandstand.position.set(L.grandstand.x, 0, L.grandstand.z);
+    this.grandstand.rotation.y = L.grandstand.rot;
     s.add(this.grandstand);
 
-    // Podium island on a bridge north of the circuit.
-    const north = this.islandOutline.reduce((a, p) => (p.y > a.y ? p : a));
-    const pc = V(north.x, 0, north.y + 30);
-    const podOutline = outlineAround(pc, [pc.clone().add(V(9, 0, 0)), pc.clone().add(V(-9, 0, 0)), pc.clone().add(V(0, 0, 8)), pc.clone().add(V(0, 0, -8))], 5, 36, 3);
-    const podIsland = buildIsland(podOutline, { depth: 18, seed: 9 });
-    s.add(podIsland);
-    this.podium = buildPodium();
-    this.podium.position.copy(pc).add(V(0, 0, 1));
-    this.podium.rotation.y = Math.PI;
+    this.tower = buildWatchTower();
+    this.tower.position.set(L.tower.x, 0, L.tower.z);
+    this.tower.rotation.y = Math.PI * 0.85; // timing board faces the pit straight side
+    s.add(this.tower);
+
+    this.podium = buildRaisedPodium();
+    this.podium.position.set(L.podium.x, 0, L.podium.z);
+    this.podium.rotation.y = L.podium.rot;
     s.add(this.podium);
-    this.podiumCenter = pc;
-    const bridgeFrom = V(north.x, 0, north.y - 3);
-    const bridgeTo = V(pc.x, 0, pc.z - 11);
-    const len = bridgeTo.z - bridgeFrom.z;
-    const planks = [];
-    for (let z = 0; z < len; z += 0.9) planks.push(bevelBox(3, 0.18, 0.8, 0.03).translate(0, -0.1, bridgeFrom.z + z + 0.4));
-    const rails = [];
-    for (const x of [-1.5, 1.5]) {
-      rails.push(rod(V(x, 0.9, bridgeFrom.z), V(x, 0.9, bridgeTo.z), 0.05, 6));
-      for (let z = bridgeFrom.z; z <= bridgeTo.z; z += 3) rails.push(rod(V(x, -0.1, z), V(x, 0.95, z), 0.06, 6));
-    }
-    const bridge = new THREE.Group();
-    const plankMesh = new THREE.Mesh(merge(planks), new THREE.MeshStandardMaterial({ color: '#b98a5a', roughness: 0.8 }));
-    plankMesh.receiveShadow = plankMesh.castShadow = true;
-    bridge.add(plankMesh, new THREE.Mesh(merge(rails), new THREE.MeshStandardMaterial({ color: PALETTE.canopy, roughness: 0.5 })));
-    bridge.position.x = north.x;
-    s.add(bridge);
-
-    // Trees on the main island, away from track, pit building and grandstand.
-    const keep = [];
-    for (let i = 0; i < this.track.n; i += 6) keep.push({ x: this.track.pos[i].x, z: this.track.pos[i].z, r: 13 });
-    for (let i = 0; i < this.pit.n; i += 6) keep.push({ x: this.pit.pos[i].x, z: this.pit.pos[i].z, r: 11 });
-    for (let x = -40; x <= 40; x += 5) keep.push({ x, z: GARAGE_FRONT_Z - 4, r: 10 });
-    for (let x = -32; x <= 32; x += 5) keep.push({ x, z: -17, r: 9 });
-    keep.push({ x: north.x, z: north.y, r: 8 });
-    const rand = rng(17);
-    s.add(scatterTrees(this.islandOutline, keep, 90, rand));
-    s.add(scatterTrees(podOutline, [{ x: pc.x, z: pc.z, r: 11 }, { x: pc.x, z: pc.z - 10, r: 6 }], 8, rand));
-
-    // Small decorative islands drifting around the circuit.
-    this.floaters = [];
-    const spots = [[-150, 18, -60, 16], [155, -8, -85, 13], [175, 26, 60, 10], [-170, -14, 90, 12], [60, 34, 150, 9], [-90, -30, -150, 14]];
-    spots.forEach(([x, y, z, r], i) => {
-      const c = V(x, 0, z);
-      const pts = [];
-      for (let a = 0; a < 6; a++) pts.push(c.clone().add(V(Math.cos(a) * r * 0.6, 0, Math.sin(a * 1.3) * r * 0.6)));
-      const out = outlineAround(c, pts, 3, 28, 2);
-      const g = new THREE.Group();
-      g.add(buildIsland(out, { depth: r * 1.6, seed: 30 + i, grassH: 0.9 }));
-      g.add(scatterTrees(out, [], Math.round(r / 2), rand, { minDist: 0 }));
-      g.position.y = y;
-      g.userData.phase = i * 1.7;
-      g.userData.y = y;
-      s.add(g);
-      this.floaters.push(g);
-    });
 
     this.clouds = buildClouds();
     s.add(this.clouds);
     s.add(buildSky());
 
     // Lights: one warm key with soft shadows, a sky fill.
-    this.hemi = new THREE.HemisphereLight('#d6ecff', '#7fb85a', 1.1);
+    this.hemi = new THREE.HemisphereLight('#F3EEE3', '#6B7A45', 1.05);
     s.add(this.hemi);
-    const sun = new THREE.DirectionalLight('#fff0d8', 2.7);
-    sun.position.set(90, 150, 70);
+    const sun = new THREE.DirectionalLight('#FFE6C2', 2.6);
+    sun.position.set(110, 140, 90);
     sun.target.position.set(0, 0, -5);
     sun.castShadow = true;
     sun.shadow.mapSize.set(4096, 4096);
     const sc = sun.shadow.camera;
-    sc.left = -125;
-    sc.right = 125;
-    sc.top = 125;
-    sc.bottom = -125;
+    sc.left = -140;
+    sc.right = 140;
+    sc.top = 140;
+    sc.bottom = -140;
     sc.near = 20;
     sc.far = 420;
     sun.shadow.bias = -0.0003;
@@ -281,9 +253,73 @@ export class Game {
         onClick: () => this.focusStrategist(team),
       });
     }
+    const notWalking = () => !this.explorer?.active;
+    // Clicking anywhere on an island's ground walks you into that island.
+    const placeOf = { pit: 'pit', grandstand: 'grandstand', tower: 'tower', podium: 'podium' };
+    for (const isl of this.islands.children) {
+      const id = placeOf[isl.userData.islandId];
+      if (!id) continue;
+      I.add({
+        id: `island_${id}`,
+        kind: 'island',
+        hit: isl,
+        outline: [isl],
+        accent: '#F5C518',
+        anchor: isl.userData.anchor,
+        label: () => `🚶 ${PLACES[id].name} · click to walk in`,
+        enabled: notWalking,
+        onClick: () => this.walkInto(id),
+      });
+    }
+    // Grandstand island (the whole stand).
+    const gh = new THREE.Group();
+    Interactions.proxy(gh, 31, 10, 13, 5).position.z = -5;
+    this.grandstand.add(gh);
+    I.add({
+      id: 'grandstand',
+      kind: 'place',
+      hit: gh,
+      outline: [this.grandstand],
+      accent: '#F5C518',
+      anchor: this.grandstand,
+      label: () => '🏟 Grandstand · click to walk in',
+      enabled: notWalking,
+      onClick: () => this.walkInto('grandstand'),
+    });
+    // Pit building (upper floor and roof, so garages below stay clickable).
+    const pitHit = new THREE.Group();
+    pitHit.position.set(0, 0, GARAGE_FRONT_Z - GARAGE_DEPTH / 2);
+    Interactions.proxy(pitHit, 68, 4.5, GARAGE_DEPTH + 2, 7.6);
+    this.scene.add(pitHit);
+    I.add({
+      id: 'pitbuilding',
+      kind: 'place',
+      hit: pitHit,
+      outline: [],
+      accent: '#F5C518',
+      anchor: pitHit,
+      label: () => '🔧 Pit building · click to walk in',
+      enabled: notWalking,
+      onClick: () => this.walkInto('pit'),
+    });
+    // Watch tower.
+    const th = new THREE.Group();
+    Interactions.proxy(th, 12, 34, 12, 17);
+    this.tower.add(th);
+    I.add({
+      id: 'tower',
+      kind: 'tower',
+      hit: th,
+      outline: [this.tower],
+      accent: '#F5C518',
+      anchor: this.tower,
+      label: () => '🗼 Watch tower · click to walk in',
+      enabled: notWalking,
+      onClick: () => this.walkInto('tower'),
+    });
     // Podium.
     const ph = new THREE.Group();
-    Interactions.proxy(ph, 8, 3.5, 3.5, 1.5);
+    Interactions.proxy(ph, 17, 12, 13, 6).position.z = -3;
     this.podium.add(ph);
     I.add({
       id: 'podium',
@@ -292,8 +328,9 @@ export class Game {
       outline: [this.podium],
       accent: '#F5C518',
       anchor: this.podium,
-      label: () => '🏆 Podium',
-      onClick: () => this.focusPodium(),
+      label: () => '🏆 Podium · click to walk in',
+      enabled: notWalking,
+      onClick: () => this.walkInto('podium'),
     });
   }
 
@@ -316,7 +353,62 @@ export class Game {
 
   // ---- Focus views ----------------------------------------------------------------
 
+  // Extra things to do in an area, shown in the walking panel.
+  placeActions(id) {
+    if (id === 'pit') {
+      const launch = this.teams.filter((t) => t.launch);
+      return [
+        ...launch.map((t) => ({ label: `🏎 Drive #${t.garageCar.number}`, onClick: () => this.driveCar(t) })),
+        ...launch.map((t) => ({ label: `Pit stop · ${t.data.name.split(' ')[0]}`, onClick: () => { this.explorer.exit(); this.after(1, () => this.pitChallenge.start(t)); } })),
+      ];
+    }
+    if (id === 'tower') {
+      return [{ label: 'Live timing', onClick: () => this.showTimingModal() }];
+    }
+    if (id === 'podium') {
+      return [
+        { label: 'Choose the podium', onClick: () => this.choosePodium() },
+        ...(this.lastCelebration ? [{ label: 'Replay celebration', onClick: () => this.celebrate(this.lastCelebration) }] : []),
+      ];
+    }
+    return [];
+  }
+
+  showTimingModal() {
+    const rows = this.standings();
+    this.ui.openModal(
+      h(
+        'div',
+        {},
+        h('h2', {}, 'Live timing'),
+        h('ol', {}, rows.length ? rows.map((c) => h('li', {}, `#${c.number} ${c.driver ? c.driver.data.name : ''} · ${c.drive.lastLap ? c.drive.lastLap.toFixed(2) + ' s' : 'out lap'}`)) : h('li', {}, 'No cars running')),
+        h('div', { class: 'row' }, h('button', { class: 'primary', onclick: () => this.ui.closeModal() }, 'Close'))
+      )
+    );
+  }
+
+  driveCar(team) {
+    if (this.player.active) return;
+    if (team.garageCar.drive?.mode !== 'parked') {
+      this.ui.toast('That car is already out. Try the other one.', { icon: '⏳' });
+      return;
+    }
+    this.ui.closeModal();
+    this.ui.hideCard();
+    this.ui.hideTag();
+    this.interactions.setHover(null);
+    this.interactions.enabled = false;
+    this.player.start(team);
+  }
+
+  walkInto(id) {
+    this.ui.hideCard();
+    this.ui.hideTag();
+    this.explorer.enter(id);
+  }
+
   focusView(target, { distance, elevation, azimuth, follow = null, minEl = 15, maxEl = 60 }) {
+    if (this.explorer?.active || this.player?.active) return; // walking or driving: the camera stays with you
     this.rig.setElevationRange(minEl, maxEl);
     this.rig.goTo({ target, distance, elevation: deg(elevation), azimuth, offset: V(0, 0.5, 0) }, { follow });
     this.ui.back.hidden = false;
@@ -350,7 +442,10 @@ export class Game {
     const actions = [];
     const canView = car.display || mode === 'parked';
     if (canView) actions.push({ label: this.liveryView === car ? 'Exit livery viewer' : 'Livery viewer', onClick: () => (this.liveryView === car ? this.exitLiveryView() : this.enterLiveryView(car)) });
-    if (!car.display && mode === 'parked' && car.driver) actions.push({ label: 'Take it out', primary: true, onClick: () => this.takeItOut(car) });
+    if (!car.display && mode === 'parked' && car.driver) {
+      actions.push({ label: '🏎 Drive it', primary: true, onClick: () => this.driveCar(team) });
+      actions.push({ label: 'Watch a lap', onClick: () => this.takeItOut(car) });
+    }
     if (mode === 'track' && team.trackCar === car) actions.push({ label: 'Pit stop challenge', primary: true, onClick: () => this.pitChallenge.start(team) });
     actions.push({ label: 'Back', onClick: () => this.goHome() });
     this.ui.showCard({
@@ -581,11 +676,56 @@ export class Game {
     this.focusView(team.box.clone().add(V(0, 0.4, 0)), { distance: 13, elevation: 40, azimuth: 0.35, minEl: 30, maxEl: 55 });
   }
 
+  // Cars on track ordered by laps and distance, for the tower's timing board.
+  standings() {
+    const cars = this.teams.flatMap((t) => t.cars).filter((c) => c.drive && c.drive.mode !== 'parked');
+    return cars.sort((a, b) => (b.drive.time - (b.drive.lapStart ?? b.drive.time)) - (a.drive.time - (a.drive.lapStart ?? a.drive.time)) || a.number - b.number);
+  }
+
+  // Card for an area with a Walk in button.
+  focusPlace(id) {
+    const place = PLACES[id];
+    this.focus = { kind: 'place', id };
+    const target = id === 'grandstand' ? this.grandstand.position.clone().add(V(0, 3, -4)) : V(0, 3, GARAGE_FRONT_Z);
+    this.focusView(target, { distance: id === 'pit' ? 70 : 48, elevation: 26, azimuth: id === 'pit' ? 0.2 : 0.35 });
+    this.ui.showCard({
+      kicker: 'Area',
+      title: place.name,
+      accent: '#F5C518',
+      body: `<p>${place.blurb}</p>`,
+      actions: [
+        { label: '🚶 Walk in', primary: true, onClick: () => this.explorer.enter(id) },
+        ...(id === 'pit' ? this.teams.filter((t) => t.launch).map((t) => ({ label: `${t.data.name} crew`, onClick: () => this.focusCrew(t) })) : []),
+        { label: 'Back', onClick: () => this.goHome() },
+      ],
+    });
+  }
+
+  focusTower() {
+    this.focus = { kind: 'tower' };
+    this.focusView(this.tower.position.clone().add(V(0, 17, 0)), { distance: 85, elevation: 22, azimuth: this.tower.rotation.y + 0.3, minEl: 10 });
+    const rows = this.standings()
+      .map((c, i) => `<tr><td>${i + 1}. <span class="chip" style="background:${c.teamRef.data.primary};color:#fff">${c.number}</span> ${c.driver ? c.driver.data.name : ''}</td><td>${c.drive.lastLap ? c.drive.lastLap.toFixed(2) + ' s' : 'out lap'}</td></tr>`)
+      .join('');
+    this.ui.showCard({
+      kicker: 'Watch tower · Race control',
+      title: 'Live timing',
+      accent: '#0E1B2B',
+      body: `<table aria-label="Running order"><tbody>${rows || '<tr><td>No cars running</td></tr>'}</tbody></table>`,
+      actions: [
+        { label: '🚶 Walk in', primary: true, onClick: () => this.explorer.enter('tower') },
+        { label: 'View from the tower', onClick: () => { this.rig.setElevationRange(10, 70); this.rig.goTo({ target: V(0, 0, -5), distance: 70, elevation: deg(38), azimuth: this.tower.rotation.y + Math.PI }); } },
+        { label: 'Back', onClick: () => this.goHome() },
+      ],
+    });
+  }
+
   // ---- Podium ---------------------------------------------------------------------
 
   focusPodium() {
     this.focus = { kind: 'podium' };
-    this.focusView(this.podium.position.clone().add(V(0, 1.6, 0)), { distance: 13, elevation: 20, azimuth: Math.PI + 0.15 });
+    if (this.explorer?.active) return;
+    this.focusView(this.podium.position.clone().add(V(0, PODIUM_HEIGHT - 1, 0)), { distance: 30, elevation: 14, azimuth: this.podium.rotation.y - 0.35, minEl: 5 });
     const last = this.lastCelebration;
     this.ui.showCard({
       kicker: 'Podium',
@@ -593,7 +733,8 @@ export class Game {
       accent: '#F5C518',
       body: `<p>${last ? `Last podium: ${last.map((n, i) => `${i + 1}. ${driverByNumber(n).name}`).join(' · ')}` : 'Pick who stands on steps 1 to 3. The winner sprays champagne.'}</p>`,
       actions: [
-        { label: 'Choose the podium', primary: true, onClick: () => this.choosePodium() },
+        { label: '🚶 Walk in', primary: true, onClick: () => this.explorer.enter('podium') },
+        { label: 'Choose the podium', onClick: () => this.choosePodium() },
         ...(last ? [{ label: 'Replay celebration', onClick: () => this.celebrate(last) }] : []),
         { label: 'Back', onClick: () => this.goHome() },
       ],
@@ -714,7 +855,7 @@ export class Game {
   }
 
   sparkle() {
-    const at = this.podium.position.clone().add(V(0, 2.2, 0));
+    const at = this.podium.position.clone().add(V(0, PODIUM_HEIGHT + 2.2, 0));
     this.particles.emit({ pos: at, vel: V(0, 1.2, 0), color: ['#FFD23F', '#ffffff', '#F26B1D'], life: 1.2, size: 0.12, gravity: -0.8, drag: 1.5, spread: 3, count: 40, jitter: 4 });
   }
 
@@ -740,6 +881,45 @@ export class Game {
       this.setRain(!this.rain);
       rainBtn.setAttribute('aria-pressed', String(this.rain));
     });
+    document.getElementById('btn-drive').addEventListener('click', () => {
+      if (this.player.active) return;
+      const launch = this.teams.filter((t) => t.launch);
+      const content = h(
+        'div',
+        {},
+        h('h2', {}, 'Drive a car'),
+        h('p', {}, 'Take a car out for a lap from the cockpit. W/↑ go, S/↓ brake, A/D steer, Space for DRS, C to change camera.'),
+        h('div', { class: 'place-list' }, launch.map((t) => h('button', { class: 'place', style: { borderLeft: `6px solid ${t.data.primary}` }, onclick: () => this.driveCar(t) }, h('b', {}, `#${t.garageCar.number} ${t.garageCar.driver.data.name}`), h('span', {}, t.data.name)))),
+        h('div', { class: 'row' }, h('button', { onclick: () => this.ui.closeModal() }, 'Cancel'))
+      );
+      this.ui.openModal(content);
+    });
+    document.getElementById('btn-explore').addEventListener('click', () => {
+      const content = h(
+        'div',
+        {},
+        h('h2', {}, 'Walk in'),
+        h('p', {}, 'Pick an island to explore on foot.'),
+        h('div', { class: 'place-list' }, Object.entries(PLACES).map(([id, p]) => h('button', { class: 'place', onclick: () => { this.ui.closeModal(); this.explorer.enter(id); } }, h('b', {}, p.name), h('span', {}, p.blurb)))),
+        h('div', { class: 'row' }, h('button', { onclick: () => this.ui.closeModal() }, 'Cancel'))
+      );
+      this.ui.openModal(content);
+    });
+    // View controls: rotate the islands, tilt, turntable, reset.
+    const autoBtn = h('button', { 'aria-pressed': 'false', title: 'Turntable', 'aria-label': 'Auto-rotate the islands', onclick: () => this.rig.setAutoRotate(!this.rig.controls.autoRotate) }, '⟳ Auto');
+    this.rig.onAutoRotate = (on) => autoBtn.setAttribute('aria-pressed', String(on));
+    const view = h(
+      'div',
+      { class: 'view-ctl panel', role: 'group', 'aria-label': 'Rotate the islands' },
+      h('button', { 'aria-label': 'Rotate left', title: 'Rotate left', onclick: () => this.rig.rotateBy(-Math.PI / 4) }, '↺'),
+      h('button', { 'aria-label': 'Rotate right', title: 'Rotate right', onclick: () => this.rig.rotateBy(Math.PI / 4) }, '↻'),
+      h('button', { 'aria-label': 'Tilt up', title: 'Look from higher', onclick: () => this.rig.tiltBy(deg(15)) }, '▲'),
+      h('button', { 'aria-label': 'Tilt down', title: 'Look from lower', onclick: () => this.rig.tiltBy(deg(-15)) }, '▼'),
+      autoBtn,
+      h('button', { 'aria-label': 'Reset view', title: 'Reset view', onclick: () => this.goHome() }, '⌂')
+    );
+    this.ui.root.append(view);
+    this.viewCtl = view;
     document.getElementById('btn-help').addEventListener('click', () => {
       this.ui.openModal(
         h(
@@ -747,7 +927,9 @@ export class Game {
           {},
           h('h2', {}, 'How to play'),
           h('ul', {}, [
-            'Drag to orbit, scroll or pinch to zoom, right drag to pan.',
+            'Drag to rotate the islands, scroll or pinch to zoom, right drag to pan. Use the ↺ ↻ ▲ ▼ buttons or ⟳ Auto for a turntable.',
+            'Press 🏎 Drive to take a car out from the cockpit: W/↑ go, S/↓ brake, A/D steer, Space DRS, C camera, Esc leave.',
+            'Click any island, the grandstand, pit building, watch tower or podium to walk straight in (WASD or arrows, drag to look, Esc to leave).',
             'Hover or long press anything to see who it is; click or tap to visit.',
             'Tab cycles through cars, drivers and crew; Enter selects; Escape goes back.',
             'Talk to a race engineer or the pit crew to start the pit stop challenge.',
@@ -765,9 +947,9 @@ export class Game {
     this.rain = on;
     this.rainFx.lines.visible = on;
     for (const t of this.teams) for (const c of t.cars) if (c.drive) c.drive.rain = on;
-    this.hemi.intensity = on ? 0.75 : 1.1;
-    this.sun.intensity = on ? 1.4 : 2.7;
-    this.post.grade.uniforms.saturation.value = on ? 0.95 : 1.14;
+    this.hemi.intensity = on ? 0.75 : 1.05;
+    this.sun.intensity = on ? 1.3 : 2.6;
+    this.post.grade.uniforms.saturation.value = on ? 0.88 : 1.02;
     if (on) {
       for (const t of this.teams.filter((x) => x.launch)) this.nextCompound[t.data.id] = 'intermediate';
       this.ui.toast('Rain! Strategists switched the next stop to intermediates.', { icon: '🌧', accent: '#2D7FF9' });
@@ -800,12 +982,19 @@ export class Game {
     }
     for (const a of this.actors) if (a.root.visible) a.update(dt);
     this.pitChallenge.update(dt);
+    this.explorer.update(dt);
+    this.audio.update(this.explorer.active || this.player.active);
     this.updateCelebration(dt);
     this.particles.update(dt);
     this.rainFx.update(dt, this.rig.controls.target);
     this.grandstand.userData.update(this.time, this.celebrating ? 1 : this.pitChallenge.phase === 'running' ? 0.6 : 0);
+    this.podium.userData.update(this.time, this.celebrating ? 1 : 0);
     this.clouds.userData.update(this.time);
-    for (const f of this.floaters) f.position.y = f.userData.y + Math.sin(this.time * 0.35 + f.userData.phase) * 0.8;
+    this.tower.userData.update(this.time);
+    if (this.time - (this.boardDrawn ?? -9) > 1) {
+      this.boardDrawn = this.time;
+      this.tower.userData.drawBoard(this.standings().map((c) => ({ label: `${c.number} ${c.driver ? surname(c.driver.data.name).toUpperCase() : c.teamRef.data.name.split(' ')[0].toUpperCase()}`, color: c.teamRef.data.primary })));
+    }
 
     // Rain spray off the rear tires of moving cars.
     if (this.rain) {

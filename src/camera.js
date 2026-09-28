@@ -6,6 +6,9 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 const deg = THREE.MathUtils.degToRad;
+// Overview can orbit all the way round and from near-level to nearly overhead.
+export const OVERVIEW_RANGE = [8, 85];
+
 export const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
 export class CameraRig {
@@ -20,8 +23,12 @@ export class CameraRig {
     c.minDistance = 4;
     c.maxDistance = 330;
     c.zoomToCursor = true;
-    this.setElevationRange(35, 45);
+    this.setElevationRange(...OVERVIEW_RANGE);
     this.glide = null;
+    this.frozen = false; // walk mode owns the camera
+    c.autoRotateSpeed = 0.7;
+    // Any drag stops the turntable.
+    c.addEventListener('start', () => this.stopAutoRotate());
     this.follow = null;
     this.home = { target: new THREE.Vector3(2, 0, -8), distance: 300, azimuth: deg(20), elevation: deg(40) };
     this.jumpTo(this.home);
@@ -62,7 +69,29 @@ export class CameraRig {
     }
   }
 
+  // Turn the view around the islands by an angle (radians).
+  rotateBy(da) {
+    const v = this.view();
+    this.goTo({ ...v, azimuth: v.azimuth + da }, { duration: 0.6 });
+  }
+
+  tiltBy(de) {
+    const v = this.view();
+    const [lo, hi] = [Math.PI / 2 - this.controls.maxPolarAngle, Math.PI / 2 - this.controls.minPolarAngle];
+    this.goTo({ ...v, elevation: THREE.MathUtils.clamp(v.elevation + de, lo, hi) }, { duration: 0.5 });
+  }
+
+  setAutoRotate(on) {
+    this.controls.autoRotate = on && !reducedMotion();
+    this.onAutoRotate?.(this.controls.autoRotate);
+  }
+
+  stopAutoRotate() {
+    if (this.controls.autoRotate) this.setAutoRotate(false);
+  }
+
   update(dt) {
+    if (this.frozen) return;
     const g = this.glide;
     if (g) {
       g.t += dt;
@@ -98,7 +127,7 @@ export class CameraRig {
       this.controls.target.add(delta);
       this.camera.position.add(delta);
     }
-    this.controls.update();
+    this.controls.update(dt);
   }
 
   liveTarget(to, followObj) {
@@ -107,7 +136,7 @@ export class CameraRig {
   }
 
   back(onArrive) {
-    this.setElevationRange(35, 45);
+    this.setElevationRange(...OVERVIEW_RANGE);
     this.goTo(this.home, { onArrive });
   }
 }

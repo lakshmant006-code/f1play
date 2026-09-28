@@ -7,6 +7,7 @@ import { Game } from './game/game.js';
 
 const canvas = document.getElementById('scene');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+renderer.setClearColor('#E9E2D5');
 const mobile = matchMedia('(pointer: coarse)').matches;
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, mobile ? 1.5 : 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -16,7 +17,7 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog('#cfe9f8', 320, 820);
+scene.fog = new THREE.Fog('#E9E2D5', 300, 780);
 const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 scene.environmentIntensity = 0.55;
@@ -54,4 +55,6 @@ renderer.setAnimationLoop((now) => {
   post.render();
 });
 
-document.getElementById('loading').classList.add('done');
+const loading = document.getElementById('loading');
+loading.classList.add('done');
+setTimeout(() => loading.remove(), 700);

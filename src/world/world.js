@@ -3,7 +3,7 @@
 
 import * as THREE from 'three';
 import { bevelBox, merge, tint, rod } from '../geo.js';
-import { PALETTE, TEAMS } from '../data.js';
+import { PALETTE, TEAMS, SCENERY } from '../data.js';
 import { TRACK_WIDTH, PIT_WIDTH, PIT_Z, GARAGE_FRONT_Z, GARAGE_DEPTH, GARAGE_X } from '../game/layout.js';
 
 const mat = (color, opts = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.85, ...opts });
@@ -16,61 +16,224 @@ function rng(seed = 7) {
 
 // ---- Island shell ------------------------------------------------------------
 
-// Radial outline around a center, pushed out to cover a set of points plus a margin.
-export function outlineAround(center, points, margin, count = 72, smooth = 4) {
-  const r = new Array(count).fill(8);
-  for (const p of points) {
-    const dx = p.x - center.x;
-    const dz = p.z - center.z;
-    const a = Math.atan2(dz, dx);
-    const d = Math.hypot(dx, dz) + margin;
-    const i = Math.round(((a + Math.PI) / (Math.PI * 2)) * count) % count;
-    for (let k = -2; k <= 2; k++) {
-      const j = (i + k + count) % count;
-      r[j] = Math.max(r[j], d - Math.abs(k) * 0.8);
+// Shared grass texture: soft olive patches with a fine speckle, mapped in
+// world meters (the extruded cap's UVs are the shape's x/z coordinates).
+let grassTex = null;
+function grassTexture() {
+  if (grassTex) return grassTex;
+  const S = 512;
+  const c = document.createElement('canvas');
+  c.width = c.height = S;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = SCENERY.grass;
+  ctx.fillRect(0, 0, S, S);
+  const r = rng(41);
+  // Large soft patches, drawn wrapped so the tile repeats seamlessly.
+  const blob = (x, y, rad, color, alpha) => {
+    for (const dx of [-S, 0, S]) for (const dy of [-S, 0, S]) {
+      const g = ctx.createRadialGradient(x + dx, y + dy, 0, x + dx, y + dy, rad);
+      g.addColorStop(0, color);
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = g;
+      ctx.fillRect(x + dx - rad, y + dy - rad, rad * 2, rad * 2);
     }
+  };
+  for (let i = 0; i < 26; i++) blob(r() * S, r() * S, 40 + r() * 110, i % 3 ? SCENERY.grassDark : SCENERY.grassLight, 0.35);
+  for (let i = 0; i < 10; i++) blob(r() * S, r() * S, 30 + r() * 60, SCENERY.meadow, 0.3);
+  ctx.globalAlpha = 1;
+  for (let i = 0; i < 9000; i++) {
+    const l = r();
+    ctx.fillStyle = l < 0.5 ? 'rgba(40,62,26,0.22)' : 'rgba(170,190,110,0.18)';
+    ctx.fillRect(r() * S, r() * S, 1.5, 1.5);
   }
-  let out = r;
-  for (let s = 0; s < smooth; s++) {
-    out = out.map((_, i) => Math.max(out[i], (out[(i - 1 + count) % count] + out[i] * 2 + out[(i + 1) % count]) / 4));
-  }
-  return out.map((rad, i) => {
-    const a = (i / count) * Math.PI * 2 - Math.PI;
-    return new THREE.Vector2(center.x + Math.cos(a) * rad, center.z + Math.sin(a) * rad);
-  });
+  grassTex = new THREE.CanvasTexture(c);
+  grassTex.wrapS = grassTex.wrapT = THREE.RepeatWrapping;
+  grassTex.repeat.set(1 / 90, 1 / 90);
+  grassTex.colorSpace = THREE.SRGBColorSpace;
+  grassTex.anisotropy = 8;
+  return grassTex;
 }
 
-// Grass top slab plus a rocky underside that tapers to a point.
-export function buildIsland(outline, { depth = 30, seed = 1, grassH = 1.2 } = {}) {
+const clamp01 = (x) => Math.min(1, Math.max(0, x));
+
+// ---- Procedural noise for the rock -------------------------------------------
+
+function hash3(x, y, z) {
+  let h = (x * 374761393 + y * 668265263 + z * 2147483647) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
+}
+function vnoise(x, y, z) {
+  const xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z);
+  const xf = x - xi, yf = y - yi, zf = z - zi;
+  const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf), w = zf * zf * (3 - 2 * zf);
+  const l = (a, b, t) => a + (b - a) * t;
+  const c = (dx, dy, dz) => hash3(xi + dx, yi + dy, zi + dz);
+  return l(
+    l(l(c(0, 0, 0), c(1, 0, 0), u), l(c(0, 1, 0), c(1, 1, 0), u), v),
+    l(l(c(0, 0, 1), c(1, 0, 1), u), l(c(0, 1, 1), c(1, 1, 1), u), v),
+    w
+  ) * 2 - 1;
+}
+// Fractal noise in -1..1.
+export function fbm(x, y, z, oct = 4) {
+  let a = 0.5, f = 1, s = 0, n = 0;
+  for (let i = 0; i < oct; i++) {
+    s += a * vnoise(x * f, y * f, z * f);
+    n += a;
+    a *= 0.5;
+    f *= 2.03;
+  }
+  return s / n;
+}
+
+// Rock surface detail: cracks and grain as a tiling bump map.
+let rockBump = null;
+function rockBumpTexture() {
+  if (rockBump) return rockBump;
+  const S = 256;
+  const c = document.createElement('canvas');
+  c.width = c.height = S;
+  const ctx = c.getContext('2d');
+  const img = ctx.createImageData(S, S);
+  for (let y = 0; y < S; y++) {
+    for (let x = 0; x < S; x++) {
+      // Tileable by sampling noise on a torus.
+      const a = (x / S) * Math.PI * 2;
+      const b = (y / S) * Math.PI * 2;
+      const nx = Math.cos(a) * 2, ny = Math.sin(a) * 2, nz = Math.cos(b) * 2 + Math.sin(b) * 1.3;
+      let v = fbm(nx, ny + Math.sin(b) * 2, nz, 5) * 0.5 + 0.5;
+      // Horizontal strata lines and a few crack ridges.
+      v -= Math.pow(Math.abs(Math.sin(b * 6 + fbm(nx, ny, nz) * 3)), 18) * 0.35;
+      v -= Math.pow(1 - Math.abs(fbm(nx * 2, ny * 2, nz * 2, 3)), 12) * 0.4;
+      const g = Math.max(0, Math.min(255, v * 255));
+      const i = (y * S + x) * 4;
+      img.data[i] = img.data[i + 1] = img.data[i + 2] = g;
+      img.data[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  rockBump = new THREE.CanvasTexture(c);
+  rockBump.wrapS = rockBump.wrapT = THREE.RepeatWrapping;
+  rockBump.anisotropy = 8;
+  return rockBump;
+}
+
+let islandMats = null;
+export function islandMaterials() {
+  if (islandMats) return islandMats;
+  islandMats = {
+    grass: new THREE.MeshStandardMaterial({ map: grassTexture(), roughness: 0.97 }),
+    soil: new THREE.MeshStandardMaterial({ color: SCENERY.soil, roughness: 1 }),
+    rock: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.93, bumpMap: rockBumpTexture(), bumpScale: 2.2 }),
+  };
+  return islandMats;
+}
+
+// Resample a closed outline to even spacing, then relax it so rims are smooth.
+function smoothOutline(outline, spacing = 1.6, passes = 6) {
+  const pts = outline.map((p) => p.clone());
+  let per = 0;
+  for (let i = 0; i < pts.length; i++) per += pts[i].distanceTo(pts[(i + 1) % pts.length]);
+  const n = Math.max(24, Math.min(360, Math.round(per / spacing)));
+  const out = [];
+  let seg = 0;
+  let acc = 0;
+  for (let k = 0; k < n; k++) {
+    const target = (k / n) * per;
+    while (seg < pts.length) {
+      const a = pts[seg];
+      const b = pts[(seg + 1) % pts.length];
+      const len = a.distanceTo(b);
+      if (acc + len >= target) {
+        out.push(a.clone().lerp(b, len ? (target - acc) / len : 0));
+        break;
+      }
+      acc += len;
+      seg++;
+    }
+  }
+  let cur = out;
+  for (let p = 0; p < passes; p++) {
+    cur = cur.map((q, i) => {
+      const a = cur[(i - 1 + cur.length) % cur.length];
+      const b = cur[(i + 1) % cur.length];
+      return new THREE.Vector2((a.x + q.x * 2 + b.x) / 4, (a.y + q.y * 2 + b.y) / 4);
+    });
+  }
+  return cur;
+}
+
+// Grass top over a band of soil, then a dense craggy rock underside: noise
+// carved ledges and strata, several hanging lobes and spurs, crevice shading,
+// a bump map for cracks, and a few loose boulders drifting underneath.
+export function buildIsland(rawOutline, { depth = 30, seed = 1, grassH = 1.2 } = {}) {
   const rand = rng(seed);
+  const M = islandMaterials();
   const g = new THREE.Group();
+  const outline = smoothOutline(rawOutline);
   const shape = new THREE.Shape(outline.map((p) => new THREE.Vector2(p.x, -p.y)));
-  const top = new THREE.ExtrudeGeometry(shape, { depth: grassH, bevelEnabled: true, bevelThickness: 0.35, bevelSize: 0.6, bevelSegments: 2, curveSegments: 4 });
+  const top = new THREE.ExtrudeGeometry(shape, { depth: grassH, bevelEnabled: true, bevelThickness: 0.35, bevelSize: 0.6, bevelSegments: 4, curveSegments: 4 });
   top.rotateX(-Math.PI / 2);
   top.translate(0, -grassH - 0.36, 0); // bevel adds 0.35 m above the slab; keep the top just under y = 0
-  const grass = new THREE.Mesh(top, mat(PALETTE.grass, { roughness: 0.95 }));
+  const grass = new THREE.Mesh(top, [M.grass, M.soil]);
   grass.receiveShadow = true;
   g.add(grass);
 
-  // Rock: rings shrinking toward the centroid with noise; flat shaded facets.
+  // Rock grid: rings from the rim down, columns around the outline.
   const c = outline.reduce((a, p) => a.add(p), new THREE.Vector2()).multiplyScalar(1 / outline.length);
-  const rings = 6;
   const n = outline.length;
-  const pos = [];
-  const idx = [];
-  for (let k = 0; k <= rings; k++) {
-    const t = k / rings;
-    const shrink = 1 - Math.pow(t, 0.8) * 0.97;
-    const y = -grassH - 0.3 - t * depth * (0.8 + rand() * 0.05);
+  const R = 30;
+  const sd = seed * 17.3;
+  // Hanging lobes: a few angular bumps that push the underside deeper.
+  const lobes = Array.from({ length: 4 + Math.floor(rand() * 3) }, () => ({ a: rand() * Math.PI * 2, w: 0.35 + rand() * 0.5, d: 0.25 + rand() * 0.55 }));
+  const lobe = (ang) => lobes.reduce((m, l) => Math.max(m, l.d * Math.exp(-Math.pow(Math.atan2(Math.sin(ang - l.a), Math.cos(ang - l.a)) / l.w, 2))), 0);
+  const top0 = -grassH - 0.3;
+  const pos = new Float32Array((R + 1) * n * 3 + 3);
+  const uv = new Float32Array((R + 1) * n * 2 + 2);
+  const shade = new Float32Array((R + 1) * n + 1);
+  let perim = 0;
+  const along = [0];
+  for (let i = 1; i <= n; i++) along.push((perim += outline[i - 1].distanceTo(outline[i % n])));
+  for (let k = 0; k <= R; k++) {
+    const t = k / R;
     for (let i = 0; i < n; i++) {
       const p = outline[i];
-      const jitter = k === 0 ? 1 : 0.88 + rand() * 0.2;
-      pos.push(c.x + (p.x - c.x) * shrink * jitter, y + (k ? (rand() - 0.5) * depth * 0.08 : 0), c.y + (p.y - c.y) * shrink * jitter);
+      const dx = p.x - c.x;
+      const dz = p.y - c.y;
+      const ang = Math.atan2(dz, dx);
+      const L = lobe(ang);
+      // Profile: short near-vertical cliff, a slight bulge, then a long taper.
+      const cliff = Math.min(1, t / 0.08);
+      const taper = t < 0.08 ? 1 : Math.max(0.02, Math.pow(1 - (t - 0.08) / 0.92, 0.9 + (1 - L) * 0.5));
+      let s = (t < 0.08 ? 1 - cliff * 0.05 : 0.95 * taper) * (1 + 0.05 * Math.sin(t * Math.PI));
+      const colDepth = depth * (0.62 + L * 0.75 + fbm(Math.cos(ang) * 1.3 + sd, Math.sin(ang) * 1.3, 0.5) * 0.18);
+      let y = top0 - (t < 0.08 ? cliff * depth * 0.07 : depth * 0.07 + (colDepth - depth * 0.07) * Math.pow((t - 0.08) / 0.92, 1.05));
+      // Crags: fractal noise pushes the surface in and out; strata make ledges.
+      const wx = c.x + dx * s;
+      const wz = c.y + dz * s;
+      const nz = fbm(wx * 0.07 + sd, y * 0.09, wz * 0.07, 5);
+      const strata = Math.pow(Math.abs(Math.sin(y * 0.55 + fbm(wx * 0.03, 0, wz * 0.03) * 2)), 6) * 0.06;
+      const crag = k === 0 ? 0 : nz * 0.16 * Math.min(1, t * 6) - strata * Math.min(1, t * 6);
+      s *= 1 + crag;
+      if (k > 0) y += fbm(wx * 0.05, sd, wz * 0.05, 3) * depth * 0.05 * t;
+      const j = k * n + i;
+      pos[j * 3] = c.x + dx * s;
+      pos[j * 3 + 1] = y;
+      pos[j * 3 + 2] = c.y + dz * s;
+      uv[j * 2] = along[i] / 9;
+      uv[j * 2 + 1] = -y / 9;
+      shade[j] = crag;
     }
   }
-  pos.push(c.x, -grassH - depth * 1.05, c.y);
-  const tip = pos.length / 3 - 1;
-  for (let k = 0; k < rings; k++) {
+  // Tip.
+  const tipIdx = (R + 1) * n;
+  pos[tipIdx * 3] = c.x;
+  pos[tipIdx * 3 + 1] = top0 - depth * 1.15;
+  pos[tipIdx * 3 + 2] = c.y;
+  const idx = [];
+  for (let k = 0; k < R; k++) {
     for (let i = 0; i < n; i++) {
       const a = k * n + i;
       const b = k * n + ((i + 1) % n);
@@ -79,27 +242,83 @@ export function buildIsland(outline, { depth = 30, seed = 1, grassH = 1.2 } = {}
       idx.push(a, b, cc, b, d, cc);
     }
   }
-  for (let i = 0; i < n; i++) idx.push(rings * n + i, rings * n + ((i + 1) % n), tip);
-  let rock = new THREE.BufferGeometry();
-  rock.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  for (let i = 0; i < n; i++) idx.push(R * n + i, R * n + ((i + 1) % n), tipIdx);
+  const rock = new THREE.BufferGeometry();
+  rock.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  rock.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
   rock.setIndex(idx);
-  rock = rock.toNonIndexed();
   rock.computeVertexNormals();
-  // Darken the lower strata a little via vertex colors.
-  const col = [];
-  const base = new THREE.Color(PALETTE.cliff);
-  const dark = new THREE.Color('#6d4a31');
-  const p = rock.attributes.position;
-  for (let i = 0; i < p.count; i++) {
-    const t = Math.min(1, -p.getY(i) / depth);
-    const band = Math.sin(p.getY(i) * 0.9) * 0.06;
-    const cc = base.clone().lerp(dark, t * 0.7 + band);
-    col.push(cc.r, cc.g, cc.b);
+  // Where rings converge toward the tip, triangles collapse; give those
+  // vertices a straight-down normal instead of NaN.
+  const nrm = rock.attributes.normal;
+  for (let j = 0; j < nrm.count; j++) {
+    const x = nrm.getX(j), y = nrm.getY(j), z = nrm.getZ(j);
+    if (!(x * x + y * y + z * z > 1e-6)) nrm.setXYZ(j, 0, -1, 0);
   }
-  rock.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  const rockMesh = new THREE.Mesh(rock, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, flatShading: true }));
-  rockMesh.castShadow = true;
+  // Colors: soil under the lip, warm rock fading to dark earth, crevices darker.
+  const col = new Float32Array(pos.length);
+  const soil = new THREE.Color(SCENERY.soil);
+  const mid = new THREE.Color(SCENERY.cliff);
+  const dark = new THREE.Color(SCENERY.cliffDark);
+  const warm = new THREE.Color('#8A6546');
+  const tmp = new THREE.Color();
+  for (let j = 0; j <= tipIdx; j++) {
+    const y = -pos[j * 3 + 1];
+    const t = Math.min(1, y / (depth * 1.1));
+    const band = fbm(pos[j * 3] * 0.02, y * 0.35, pos[j * 3 + 2] * 0.02, 2) * 0.18;
+    if (y < grassH + 1.6) tmp.copy(soil);
+    else tmp.copy(warm).lerp(mid, clamp01(t * 1.6 + band)).lerp(dark, clamp01(t * 1.15 - 0.2 + band));
+    const ao = 1 + Math.min(0, shade[j] || 0) * 2.2 + Math.max(0, shade[j] || 0) * 0.6;
+    tmp.multiplyScalar(Math.max(0.45, Math.min(1.15, ao)));
+    col[j * 3] = tmp.r;
+    col[j * 3 + 1] = tmp.g;
+    col[j * 3 + 2] = tmp.b;
+  }
+  rock.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  const rockMesh = new THREE.Mesh(rock, M.rock);
+  rockMesh.receiveShadow = true;
   g.add(rockMesh);
+
+  // Spurs: smaller hanging rock spikes around the underside, and loose boulders.
+  const spurs = [];
+  const nSpurs = 5 + Math.floor(perim / 60);
+  for (let q = 0; q < nSpurs; q++) {
+    const i = Math.floor(rand() * n);
+    const k = Math.floor(R * (0.25 + rand() * 0.45));
+    const j = k * n + i;
+    const px = pos[j * 3], py = pos[j * 3 + 1], pz = pos[j * 3 + 2];
+    const len = depth * (0.12 + rand() * 0.22);
+    const rad = len * (0.18 + rand() * 0.1);
+    const cone = new THREE.ConeGeometry(rad, len, 9, 6);
+    const cp = cone.attributes.position;
+    for (let v = 0; v < cp.count; v++) {
+      const f = 1 + fbm(cp.getX(v) * 0.6 + q, cp.getY(v) * 0.4, cp.getZ(v) * 0.6, 3) * 0.3;
+      cp.setX(v, cp.getX(v) * f);
+      cp.setZ(v, cp.getZ(v) * f);
+    }
+    cone.rotateX(Math.PI);
+    cone.translate(px + (c.x - px) * 0.08, py - len / 2 + rad * 0.6, pz + (c.y - pz) * 0.08);
+    spurs.push(tint(cone, rand() < 0.5 ? SCENERY.cliff : '#5A4131'));
+  }
+  const boulders = [];
+  const nB = 3 + Math.floor(rand() * 4);
+  for (let q = 0; q < nB; q++) {
+    const a = rand() * Math.PI * 2;
+    const r = Math.sqrt(perim / Math.PI / 2) * (0.35 + rand() * 0.6);
+    const size = 1.2 + rand() * 3.2;
+    const b = new THREE.IcosahedronGeometry(size, 2);
+    const bp = b.attributes.position;
+    for (let v = 0; v < bp.count; v++) {
+      const f = 1 + fbm(bp.getX(v) * 0.5 + q * 3, bp.getY(v) * 0.5, bp.getZ(v) * 0.5, 3) * 0.35;
+      bp.setXYZ(v, bp.getX(v) * f, bp.getY(v) * f * 0.8, bp.getZ(v) * f);
+    }
+    b.computeVertexNormals(); // boulders are closed and smooth, so this is safe
+    b.translate(c.x + Math.cos(a) * r, top0 - depth * (0.35 + rand() * 0.7), c.y + Math.sin(a) * r);
+    boulders.push(tint(b, rand() < 0.5 ? SCENERY.cliff : '#6A4C37'));
+  }
+  const extra = new THREE.Mesh(merge([...spurs, ...boulders], { color: true, uv: true }), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, bumpMap: rockBumpTexture(), bumpScale: 1.5 }));
+  g.add(extra);
+  g.userData.outline = outline;
   return g;
 }
 
@@ -160,7 +379,7 @@ function asphaltTexture() {
   return t;
 }
 
-export function buildTrackMeshes(track, pit) {
+export function buildTrackMeshes(track, pit, onIsland = () => true) {
   const g = new THREE.Group();
   const asphalt = asphaltTexture();
   const trackMat = new THREE.MeshStandardMaterial({ map: asphalt, roughness: 0.88 });
@@ -195,7 +414,7 @@ export function buildTrackMeshes(track, pit) {
       kerbSpots.push({ pos: smp.pos.clone(), tan: smp.tan.clone(), side, red: Math.round(s / 1.6) % 2 === 0 });
     }
   }
-  const kerbGeo = bevelBox(1.0, 0.08, 1.55, 0.02);
+  const kerbGeo = new THREE.BoxGeometry(1.0, 0.08, 1.55);
   const kerbs = new THREE.InstancedMesh(kerbGeo, mat('#ffffff', { roughness: 0.6 }), kerbSpots.length);
   const m = new THREE.Matrix4();
   const q = new THREE.Quaternion();
@@ -214,7 +433,7 @@ export function buildTrackMeshes(track, pit) {
 
   // Tire walls on the outside of corners, kept clear of the rest of the track.
   const walls = [];
-  for (let s = 0; s < track.length; s += 1.1) {
+  for (let s = 0; s < track.length; s += 0.8) {
     track.at(s, smp);
     if (Math.abs(smp.curv) < 0.05) continue;
     const out = -Math.sign(smp.curv);
@@ -225,9 +444,9 @@ export function buildTrackMeshes(track, pit) {
     let clear = true;
     for (let i = 0; i < track.n && clear; i += 4) if (track.pos[i].distanceTo(p) < TRACK_WIDTH / 2 + 4.5) clear = false;
     for (let i = 0; i < pit.n && clear; i += 4) if (pit.pos[i].distanceTo(p) < PIT_WIDTH / 2 + 3) clear = false;
-    if (clear) walls.push({ p, a: Math.atan2(smp.tan.x, smp.tan.z) });
+    if (clear && onIsland(p.x, p.z)) walls.push({ p, a: Math.atan2(smp.tan.x, smp.tan.z) });
   }
-  const tireGeo = new THREE.TorusGeometry(0.34, 0.16, 6, 12).rotateX(Math.PI / 2);
+  const tireGeo = new THREE.TorusGeometry(0.36, 0.17, 5, 10).rotateX(Math.PI / 2);
   const tires = new THREE.InstancedMesh(tireGeo, mat(PALETTE.barrier, { roughness: 0.9 }), walls.length * 3);
   let ti = 0;
   for (const w of walls) {
@@ -364,157 +583,42 @@ export function buildPitBuilding() {
   return g;
 }
 
-// Stepped grandstand with an instanced crowd and a canopy roof.
-export function buildGrandstand(rand = rng(11)) {
-  const g = new THREE.Group();
-  const steps = [];
-  const rows = 7;
-  const len = 56;
-  for (let r = 0; r < rows; r++) steps.push(bevelBox(len, 0.6, 1.2, 0.05).translate(0, 0.3 + r * 0.6, -r * 1.1));
-  const stand = new THREE.Mesh(merge(steps), mat('#c7ccd4', { roughness: 0.7 }));
-  stand.castShadow = true;
-  stand.receiveShadow = true;
-  g.add(stand);
-  const roof = new THREE.Mesh(bevelBox(len + 2, 0.3, rows * 1.2 + 2, 0.08).translate(0, rows * 0.6 + 3.2, -(rows - 1) * 0.55), mat(PALETTE.canopy, { roughness: 0.4 }));
-  roof.castShadow = true;
-  g.add(roof);
-  const posts = [];
-  for (let x = -len / 2 + 1; x <= len / 2; x += 9) posts.push(rod(new THREE.Vector3(x, 0, -(rows - 1) * 1.1 - 0.4), new THREE.Vector3(x, rows * 0.6 + 3.1, -(rows - 1) * 1.1 - 0.4), 0.14, 6));
-  g.add(new THREE.Mesh(merge(posts), mat(PALETTE.barrier, { metalness: 0.4, roughness: 0.5 })));
 
-  // Crowd in team colors.
-  const fanColors = TEAMS.flatMap((t) => [t.primary, t.secondary, t.accent]).concat(['#ffffff', '#f2c14e', '#e85d75']);
-  const perRow = 60;
-  const fan = new THREE.CapsuleGeometry(0.2, 0.35, 2, 6).translate(0, 0.4, 0);
-  const crowd = new THREE.InstancedMesh(fan, new THREE.MeshStandardMaterial({ roughness: 0.8 }), rows * perRow);
-  const m = new THREE.Matrix4();
-  const c = new THREE.Color();
-  let i = 0;
-  const bob = [];
-  for (let r = 0; r < rows; r++) {
-    for (let k = 0; k < perRow; k++) {
-      if (rand() < 0.18) continue;
-      const x = -len / 2 + 0.8 + (k / perRow) * (len - 1.6) + (rand() - 0.5) * 0.3;
-      const y = 0.6 + r * 0.6;
-      const z = -r * 1.1;
-      m.makeTranslation(x, y, z);
-      crowd.setMatrixAt(i, m);
-      crowd.setColorAt(i, c.set(fanColors[Math.floor(rand() * fanColors.length)]));
-      bob.push({ x, y, z, ph: rand() * 6.28 });
-      i++;
-    }
-  }
-  crowd.count = i;
-  crowd.castShadow = true;
-  g.add(crowd);
-  g.userData.update = (t, excite = 0) => {
-    for (let j = 0; j < bob.length; j += 1) {
-      const b = bob[j];
-      const jump = Math.max(0, Math.sin(t * (4 + excite * 6) + b.ph)) * (0.03 + excite * 0.25);
-      m.makeTranslation(b.x, b.y + jump, b.z);
-      crowd.setMatrixAt(j, m);
-    }
-    crowd.instanceMatrix.needsUpdate = true;
-  };
-  return g;
-}
-
-// Podium steps 1-3 with numbers.
-export function buildPodium() {
-  const g = new THREE.Group();
-  const heights = { 1: 1.2, 2: 0.8, 3: 0.5 };
-  const xs = { 1: 0, 2: -2.2, 3: 2.2 };
-  const stepMat = mat(PALETTE.canopy, { roughness: 0.4 });
-  for (const n of [1, 2, 3]) {
-    const s = new THREE.Mesh(bevelBox(2.1, heights[n], 1.8, 0.06), stepMat);
-    s.position.set(xs[n], heights[n] / 2, 0);
-    s.castShadow = true;
-    s.receiveShadow = true;
-    const label = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.5), new THREE.MeshStandardMaterial({ map: textTexture([String(n)], { w: 128, h: 80, bg: '#F4F5F7', fg: '#0E1B2B' }) }));
-    label.position.set(xs[n], heights[n] / 2, 0.905);
-    g.add(s, label);
-  }
-  const back = new THREE.Mesh(bevelBox(8, 3.4, 0.3, 0.06).translate(0, 1.7, -1.4), mat('#0E1B2B', { roughness: 0.6 }));
-  back.castShadow = true;
-  const mark = new THREE.Mesh(new THREE.PlaneGeometry(6, 0.8), new THREE.MeshStandardMaterial({ map: textTexture(['SKY CIRCUIT'], { bg: '#0E1B2B', fg: '#F4F5F7' }) }));
-  mark.position.set(0, 2.8, -1.24);
-  g.add(back, mark);
-  g.userData.stepTop = (n) => new THREE.Vector3(xs[n], heights[n], 0);
-  return g;
-}
-
-// Instanced low-poly trees scattered away from keep-out points.
-export function scatterTrees(outline, keepOut, count, rand, { minDist = 9, yBase = 0 } = {}) {
-  const shape = new THREE.Shape(outline);
-  const pts = shape.getPoints();
-  const box = new THREE.Box2().setFromPoints(pts);
-  const inside = (x, z) => {
-    let c = false;
-    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
-      if (pts[i].y > z !== pts[j].y > z && x < ((pts[j].x - pts[i].x) * (z - pts[i].y)) / (pts[j].y - pts[i].y) + pts[i].x) c = !c;
-    }
-    return c;
-  };
-  const spots = [];
-  let guard = 0;
-  while (spots.length < count && guard++ < count * 60) {
-    const x = box.min.x + rand() * (box.max.x - box.min.x);
-    const z = box.min.y + rand() * (box.max.y - box.min.y);
-    if (!inside(x, z)) continue;
-    // Stay a few meters in from the edge.
-    let edge = Infinity;
-    for (const p of pts) edge = Math.min(edge, Math.hypot(p.x - x, p.y - z));
-    if (edge < 3) continue;
-    let ok = true;
-    for (const k of keepOut) {
-      if (Math.hypot(k.x - x, k.z - z) < (k.r ?? minDist)) {
-        ok = false;
-        break;
-      }
-    }
-    if (ok) spots.push({ x, z, s: 0.7 + rand() * 0.7, c: rand() });
-  }
-  const trunk = new THREE.CylinderGeometry(0.18, 0.25, 1.6, 6).translate(0, 0.8, 0);
-  const crown = new THREE.IcosahedronGeometry(1.5, 0).translate(0, 2.8, 0);
-  const crown2 = new THREE.IcosahedronGeometry(1.1, 0).translate(0.3, 3.9, 0.1);
-  const tree = merge([tint(trunk, '#7a5335'), tint(crown, '#4f9a3a'), tint(crown2, '#62ad45')], { color: true });
-  const mesh = new THREE.InstancedMesh(tree, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: true }), spots.length);
-  const m = new THREE.Matrix4();
-  const q = new THREE.Quaternion();
-  const c = new THREE.Color();
-  spots.forEach((s, i) => {
-    q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), s.c * 6.28);
-    m.compose(new THREE.Vector3(s.x, yBase, s.z), q, new THREE.Vector3(s.s, s.s, s.s));
-    mesh.setMatrixAt(i, m);
-    mesh.setColorAt(i, c.setHSL(0.27 + s.c * 0.06, 0.55, 0.62 + s.c * 0.15));
-  });
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  return mesh;
-}
-
+// Soft cumulus: smooth puffs with flat, grey-shaded bottoms, drifting slowly
+// around and between the islands.
 export function buildClouds(rand = rng(21)) {
   const g = new THREE.Group();
-  const puff = new THREE.IcosahedronGeometry(1, 1);
-  const count = 26;
-  const inst = new THREE.InstancedMesh(puff, new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 1, flatShading: true, emissive: '#dfefff', emissiveIntensity: 0.25 }), count * 5);
+  const puff = new THREE.IcosahedronGeometry(1, 2);
+  const pp = puff.attributes.position;
+  const colors = [];
+  const hi = new THREE.Color('#FBF8F2');
+  const lo = new THREE.Color('#BFC2C4');
+  for (let i = 0; i < pp.count; i++) {
+    const y = pp.getY(i);
+    if (y < -0.25) pp.setY(i, -0.25 - (y + 0.25) * 0.15); // flatten the base
+    const c = lo.clone().lerp(hi, Math.min(1, Math.max(0, (y + 0.4) / 1.1)));
+    colors.push(c.r, c.g, c.b);
+  }
+  puff.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  puff.computeVertexNormals();
+  const count = 22;
+  const per = 6;
+  const inst = new THREE.InstancedMesh(puff, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, emissive: '#F2EBDD', emissiveIntensity: 0.35 }), count * per);
   const m = new THREE.Matrix4();
   const q = new THREE.Quaternion();
-  let i = 0;
   const clouds = [];
   for (let k = 0; k < count; k++) {
     const a = rand() * Math.PI * 2;
-    const r = 150 + rand() * 170;
-    const y = -40 + rand() * 60 - (r > 250 ? 10 : 0);
-    const cx = Math.cos(a) * r;
-    const cz = Math.sin(a) * r;
-    const size = 6 + rand() * 9;
+    const r = 130 + rand() * 210;
+    // Close clouds sit below the islands so they never block the view of them.
+    const y = r < 230 ? -55 + rand() * 30 : -30 + rand() * 75;
+    const size = 5 + rand() * 8;
     const parts = [];
-    for (let p = 0; p < 5; p++) {
-      parts.push({ dx: (p - 2) * size * 0.7 + (rand() - 0.5) * size * 0.4, dy: (rand() - 0.3) * size * 0.3, dz: (rand() - 0.5) * size * 0.6, s: size * (0.6 + rand() * 0.5) * (p === 2 ? 1.3 : 1) });
+    for (let p = 0; p < per; p++) {
+      const t = (p - (per - 1) / 2) / ((per - 1) / 2);
+      parts.push({ dx: t * size * 1.6 + (rand() - 0.5) * size * 0.4, dy: (1 - t * t) * size * 0.55 + rand() * size * 0.15, dz: (rand() - 0.5) * size * 0.9, s: size * (0.55 + (1 - Math.abs(t)) * 0.55 + rand() * 0.2) });
     }
-    clouds.push({ cx, cy: y, cz, parts, speed: 0.4 + rand() * 0.6, start: i });
-    i += 5;
+    clouds.push({ cx: Math.cos(a) * r, cy: y, cz: Math.sin(a) * r, parts, speed: 0.4 + rand() * 0.6 });
   }
   const place = (t) => {
     let j = 0;
@@ -522,7 +626,7 @@ export function buildClouds(rand = rng(21)) {
       const ox = Math.sin(t * 0.01 * cl.speed + cl.cx) * 6;
       for (const p of cl.parts) {
         q.identity();
-        m.compose(new THREE.Vector3(cl.cx + p.dx + ox, cl.cy + p.dy, cl.cz + p.dz), q, new THREE.Vector3(p.s, p.s * 0.6, p.s));
+        m.compose(new THREE.Vector3(cl.cx + p.dx + ox, cl.cy + p.dy, cl.cz + p.dz), q, new THREE.Vector3(p.s, p.s * 0.72, p.s));
         inst.setMatrixAt(j++, m);
       }
     }
@@ -539,10 +643,11 @@ export function buildSky() {
   const m = new THREE.ShaderMaterial({
     side: THREE.BackSide,
     depthWrite: false,
-    uniforms: { top: { value: new THREE.Color('#5fb2ec') }, mid: { value: new THREE.Color('#9ed2f2') }, bottom: { value: new THREE.Color('#d6ecf9') } },
+    fog: false,
+    uniforms: { top: { value: new THREE.Color(SCENERY.skyTop) }, mid: { value: new THREE.Color(SCENERY.skyMid) }, bottom: { value: new THREE.Color(SCENERY.skyLow) } },
     vertexShader: 'varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
     fragmentShader:
-      'uniform vec3 top; uniform vec3 mid; uniform vec3 bottom; varying vec3 vP; void main(){ float h = vP.y; vec3 c = h > 0.0 ? mix(mid, top, pow(h, 0.6)) : mix(mid, bottom, pow(-h, 0.5)); gl_FragColor = vec4(c, 1.0);\n#include <colorspace_fragment>\n}',
+      'uniform vec3 top; uniform vec3 mid; uniform vec3 bottom; varying vec3 vP; void main(){ float h = vP.y; vec3 c = h > 0.0 ? mix(mid, top, pow(h, 0.7)) : mix(mid, bottom, pow(-h, 0.6)); gl_FragColor = vec4(c, 1.0);\n#include <colorspace_fragment>\n}',
   });
   const sky = new THREE.Mesh(geo, m);
   sky.renderOrder = -1;
