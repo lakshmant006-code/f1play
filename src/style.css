@@ -184,13 +184,46 @@ body.driving .actions-top { display: none; }
 .d-help { font-size: 11px; opacity: 0.6; text-align: center; margin-top: 6px; }
 .d-actions { display: flex; gap: 8px; justify-content: center; margin-top: 8px; }
 .d-actions button { font-size: 12px; padding: 6px 12px; }
-.drive-pads { position: absolute; inset: auto 0 150px 0; display: flex; justify-content: space-between; padding: 0 16px; pointer-events: none; }
-.drive-pads > div { display: flex; gap: 10px; pointer-events: auto; }
-.pad { width: 70px; height: 70px; border-radius: 18px; font-size: 18px; touch-action: none; user-select: none; }
-.pad.go { background: #35b04a; color: #fff; height: 96px; }
-.pad.brake { background: #e03a3a; color: #fff; }
-.pad.drs { background: #F5C518; font-size: 13px; }
-.pad.drift { background: #b98cff; color: #0e1b2b; font-size: 13px; }
+/* Touch driving controls (landscape): L / R on the left, GAS / BRAKE and
+   DRIFT on the right, DRS bar at the bottom centre. Slightly see-through. */
+.drive-pads { position: absolute; inset: 0; pointer-events: none; }
+.drive-pads .pads-left, .drive-pads .pads-right, .drive-pads .pads-mid { position: absolute; bottom: max(16px, env(safe-area-inset-bottom)); pointer-events: auto; }
+.pads-left { left: max(18px, env(safe-area-inset-left)); display: flex; gap: 16px; }
+.pads-right { right: max(18px, env(safe-area-inset-right)); display: grid; grid-template-columns: auto auto; grid-template-areas: 'drift drift' 'gas brake'; gap: 10px 16px; justify-items: center; }
+.pads-mid { left: 50%; transform: translateX(-50%); }
+.pad {
+  display: grid; place-items: center; padding: 0; font-weight: 900; letter-spacing: 0.02em;
+  touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  opacity: 0.74; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  box-shadow: 0 6px 16px rgba(14, 27, 43, 0.25); transition: transform 0.08s, opacity 0.08s;
+}
+.pad.down { opacity: 1; transform: scale(0.92); }
+.pad.steer { width: 78px; height: 78px; border-radius: 50%; background: rgba(255, 255, 255, 0.88); border: 3px solid rgba(40, 42, 46, 0.85); color: #26282c; font-size: 34px; }
+.pad.gas, .pad.brake { width: 86px; height: 86px; border-radius: 50%; color: #fff; font-size: 17px; border: 3px solid rgba(255, 255, 255, 0.5); }
+.pad.gas { grid-area: gas; background: rgba(53, 176, 74, 0.9); }
+.pad.brake { grid-area: brake; background: rgba(224, 58, 58, 0.9); font-size: 15px; }
+.pad.drift { grid-area: drift; width: 120px; height: 40px; border-radius: 999px; background: rgba(185, 140, 255, 0.9); color: #0e1b2b; font-size: 14px; border: 2px solid rgba(255, 255, 255, 0.55); }
+.pad.drs { width: 156px; height: 50px; border-radius: 10px; background: rgba(255, 255, 255, 0.86); border: 3px solid rgba(40, 42, 46, 0.85); color: #16171a; font-size: 24px; }
+.pad.drs.avail { background: rgba(245, 197, 24, 0.92); border-color: rgba(120, 90, 0, 0.8); }
+.pad.drs.on { background: rgba(53, 212, 90, 0.92); border-color: rgba(20, 110, 40, 0.8); }
+/* On phones the driving display moves to the top centre, out of the thumbs' way. */
+body.touch-drive .drive-hud { top: max(8px, env(safe-area-inset-top)); bottom: auto; left: 50%; right: auto; transform: translateX(-50%) scale(0.82); transform-origin: top center; width: auto; min-width: 0; background: rgba(8, 11, 16, 0.7); }
+body.touch-drive .d-help { display: none; }
+body.touch-drive .drive-hud { z-index: 2; }
+.drive-pads { z-index: 1; }
+.rotate-note { display: none; }
+@media (orientation: portrait) {
+  body.touch-drive .pads-left, body.touch-drive .pads-right, body.touch-drive .pads-mid, body.touch-drive .drive-hud .d-row, body.touch-drive .drive-hud .d-rev { display: none; }
+  body.touch-drive .rotate-note {
+    display: grid; place-items: center; gap: 8px; position: absolute; inset: 0; padding: 24px; text-align: center; pointer-events: auto;
+    background: rgba(14, 27, 43, 0.55); color: #fff; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); align-content: center;
+  }
+  body.touch-drive .rotate-note b { font-size: 20px; }
+  body.touch-drive .rotate-note span { opacity: 0.8; font-weight: 700; }
+  body.touch-drive .rotate-icon { font-size: 54px; animation: turn-phone 1.6s ease-in-out infinite; }
+}
+@keyframes turn-phone { 0%, 30% { transform: rotate(0); } 60%, 100% { transform: rotate(-90deg); } }
+@media (prefers-reduced-motion: reduce) { .rotate-icon { animation: none !important; } }
 
 @media (max-width: 640px) {
   .brand { font-size: 16px; padding: 6px 12px; }

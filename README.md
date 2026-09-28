@@ -77,8 +77,11 @@ Covers build-order steps 1 to 3 and most of 4 and 5 from the spec:
     tighter barriers on the bridges; sliding along a wall doesn't stop you.
   - **Lap timing** with a best lap saved on this device.
   - **Controls**: W/↑ throttle, S/↓ brake and reverse, A/D or ←/→ to steer,
-    Shift/X handbrake, Esc to leave. Phones get on-screen pedals, steering and
-    a Drift button.
+    Shift/X handbrake, Esc to leave. Phones drive in landscape only, with
+    slightly see-through L / R buttons on the left, GAS and BRAKE with a
+    DRIFT button on the right and a DRS bar at the bottom (it lights when DRS
+    is available); the dash moves to the top. In portrait a note asks you to
+    turn the phone, and the game tries to lock landscape.
 - **Pit wall**: four team decks side by side between the pit wall and the pit
   lane, with the race engineer, team principal, strategist and data engineers
   seated facing the track.

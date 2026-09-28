@@ -160,7 +160,7 @@ export class PlayerDrive {
     this.setCam('cockpit');
     this.buildHud();
     g.audio?.start();
-    g.ui.toast(`<b>${d.data.name}'s car #${car.number}.</b> W or ↑ to go, A/D to steer, Shift to drift, Space for DRS, C for camera.`, { icon: '🏎', duration: 5000, accent: team.data.primary });
+    g.ui.toast(`<b>${d.data.name}'s car #${car.number}.</b> ${matchMedia('(pointer: coarse)').matches ? 'GAS to go, L / R to steer, DRIFT to slide, DRS on the straights.' : 'W or ↑ to go, A/D to steer, Shift to drift, Space for DRS, C for camera.'}`, { icon: '🏎', duration: 5000, accent: team.data.primary });
     this.place();
   }
 
@@ -173,6 +173,10 @@ export class PlayerDrive {
     document.body.classList.remove('walking', 'driving');
     this.hud?.remove();
     this.pads?.remove();
+    document.body.classList.remove('touch-drive');
+    this.touch = { throttle: 0, brake: 0, steer: 0, handbrake: 0 };
+    if (this.wentFullscreen && document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+    this.wentFullscreen = false;
     car.nodes.body.remove(this.wheel);
     // Back to the garage on stands.
     car.drive = this.saved;
@@ -239,27 +243,56 @@ export class PlayerDrive {
     if (matchMedia('(pointer: coarse)').matches) this.buildPads();
   }
 
+  // Touch controls (landscape only): L / R steering on the left, GAS and
+  // BRAKE on the right with a DRIFT (handbrake) button above them, and a DRS
+  // bar at the bottom centre. Slightly see-through so the track shows behind.
   buildPads() {
     this.pads?.remove();
-    const hold = (label, cls, on, off) => {
-      const b = h('button', { class: `pad ${cls}`, 'aria-label': label }, label);
-      const down = (e) => {
+    const steer = { L: 0, R: 0 };
+    const setSteer = () => (this.touch.steer = steer.L - steer.R);
+    const hold = (label, cls, on, off, aria = label) => {
+      const b = h('button', { class: `pad ${cls}`, 'aria-label': aria }, label);
+      const release = () => {
+        b.classList.remove('down');
+        off();
+      };
+      b.addEventListener('pointerdown', (e) => {
         e.preventDefault();
         b.setPointerCapture?.(e.pointerId);
+        b.classList.add('down');
         on();
-      };
-      b.addEventListener('pointerdown', down);
-      b.addEventListener('pointerup', off);
-      b.addEventListener('pointercancel', off);
+        navigator.vibrate?.(8);
+      });
+      b.addEventListener('pointerup', release);
+      b.addEventListener('pointercancel', release);
+      b.addEventListener('lostpointercapture', release);
+      b.addEventListener('contextmenu', (e) => e.preventDefault());
       return b;
     };
+    this.drsPad = hold('DRS', 'drs', () => this.toggleDrs(), () => {}, 'DRS');
     this.pads = h(
       'div',
       { class: 'drive-pads' },
-      h('div', { class: 'pads-left' }, hold('◀', 'steer', () => (this.touch.steer = 1), () => (this.touch.steer = 0)), hold('▶', 'steer', () => (this.touch.steer = -1), () => (this.touch.steer = 0))),
-      h('div', { class: 'pads-right' }, hold('Drift', 'drift', () => (this.touch.handbrake = 1), () => (this.touch.handbrake = 0)), hold('DRS', 'drs', () => this.toggleDrs(), () => {}), hold('Brake', 'brake', () => (this.touch.brake = 1), () => (this.touch.brake = 0)), hold('Go', 'go', () => (this.touch.throttle = 1), () => (this.touch.throttle = 0)))
+      h('div', { class: 'pads-left' }, hold('L', 'steer', () => ((steer.L = 1), setSteer()), () => ((steer.L = 0), setSteer()), 'Steer left'), hold('R', 'steer', () => ((steer.R = 1), setSteer()), () => ((steer.R = 0), setSteer()), 'Steer right')),
+      h('div', { class: 'pads-mid' }, this.drsPad),
+      h(
+        'div',
+        { class: 'pads-right' },
+        hold('DRIFT', 'drift', () => (this.touch.handbrake = 1), () => (this.touch.handbrake = 0), 'Drift (handbrake)'),
+        hold('GAS', 'gas', () => (this.touch.throttle = 1), () => (this.touch.throttle = 0), 'Gas'),
+        hold('BRAKE', 'brake', () => (this.touch.brake = 1), () => (this.touch.brake = 0), 'Brake')
+      ),
+      h('div', { class: 'rotate-note', role: 'status' }, h('div', { class: 'rotate-icon', 'aria-hidden': 'true' }, '📱'), h('b', {}, 'Turn your phone sideways to drive'), h('span', {}, 'The controls work in landscape.'))
     );
     this.game.ui.root.append(this.pads);
+    document.body.classList.add('touch-drive');
+    // Ask for landscape where the browser allows it (needs fullscreen on most phones).
+    const lock = () => screen.orientation?.lock?.('landscape').catch(() => {});
+    if (document.fullscreenElement) lock();
+    else document.documentElement.requestFullscreen?.({ navigationUI: 'hide' }).then(() => {
+      this.wentFullscreen = true;
+      lock();
+    }).catch(() => {});
   }
 
   bindKeys() {
@@ -575,6 +608,10 @@ export class PlayerDrive {
     if (drifting) this.driftEl.textContent = `DRIFT ${Math.round((beta * 180) / Math.PI)}°`;
     const smp = this.game.track.at(this.s);
     this.drsEl.classList.toggle('avail', !this.drs && Math.abs(smp.curv) < 0.02 && this.v > 18);
+    if (this.drsPad) {
+      this.drsPad.classList.toggle('on', this.drs);
+      this.drsPad.classList.toggle('avail', this.drsEl.classList.contains('avail'));
+    }
     [...this.revEl.children].forEach((el, i) => (el.className = i < lit ? (i < 5 ? 'g' : i < 10 ? 'r' : 'b') : ''));
     // Wheel screen and LEDs, ~10 Hz.
     if (this.wheel && this.time - (this.screenAt ?? -1) > 0.1) {
