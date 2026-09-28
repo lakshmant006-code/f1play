@@ -15,11 +15,21 @@ npm run build    # static site in dist/
 
 Covers build-order steps 1 to 3 and most of 4 and 5 from the spec:
 
-- **World**: the main circuit island (443 m lap, kerbs, tire walls, grid, start line),
-  pit lane with box marks, pit building with five team garages, grandstand with
-  an animated crowd, a podium island on a bridge, drifting islands and clouds.
-  Warm key light with soft shadows, sky fill, tilt-shift blur and a light grade
-  for the miniature look.
+- **World**: the circuit is split across four floating islands, joined by
+  track bridges (concrete deck, jersey barriers, catch fencing, lamp posts and
+  steel arches underneath):
+  - **Pit island**: main straight, start-light gantry, pit lane with box marks,
+    pit building with five team garages.
+  - **Grandstand island**: covered grandstand with team-colored seat blocks, a
+    seated crowd that cheers, team flags and a video screen.
+  - **Watch tower island**: race-control tower with a glass lobby, observation
+    pod, beacon mast and a live timing board.
+  - **Podium island**: stage with podium steps 1 to 3, a truss arch, a curved LED
+    backdrop and team flags.
+
+  Island shapes follow the track, and the undersides are layered soil and rock.
+  The palette is warm and hazy, with olive greens and soft clouds, plus
+  tilt-shift for the miniature look.
 - **Cars**: one procedural single seater (4.8 m, 1.9 m wide, 3.0 m wheelbase,
   0.84 m wheels) with the spec's rig: `car_root` > body, axles, wings, with
   steer, wheel, flap and rain light nodes as the only animated parts. Liveries
@@ -49,8 +59,8 @@ Covers build-order steps 1 to 3 and most of 4 and 5 from the spec:
 ## Not yet done
 
 - Character creator, glTF export and LODs (build step 6).
-- Performance pass: the scene is about 290k triangles, under the 400k target,
-  but still around 300 draw calls against the target of 100. Instancing the crew
+- Performance pass: the scene is about 390k triangles, under the 400k target,
+  but still around 390 draw calls against the target of 100. Instancing the crew
   and crowd and adding LODs is the next step.
 - The spec's open questions (working title, phones from day one, launch pair)
   are still open. The layout already works at phone width.
@@ -61,7 +71,9 @@ Covers build-order steps 1 to 3 and most of 4 and 5 from the spec:
 src/data.js            palette, teams, compounds, drivers, pit timing
 src/car/               car mesh + rig, livery atlas painter
 src/people/            person kit, helmets, animation clips, walking actors
-src/world/world.js     islands, track surfaces, buildings, trees, clouds, sky
+src/world/world.js     island builder, track surfaces, pit building, podium, clouds, sky
+src/world/circuit.js   four-island layout, track bridges, grandstand, watch tower,
+                       start gantry, trackside boards
 src/game/              layout, paths and speed profile, driving, paddock,
                        pit stop rules and challenge, game controller
 src/fx/                post stack (outline, tilt-shift, grade), particles, rain

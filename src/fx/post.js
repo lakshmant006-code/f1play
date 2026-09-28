@@ -12,7 +12,7 @@ import { HorizontalTiltShiftShader } from 'three/addons/shaders/HorizontalTiltSh
 import { VerticalTiltShiftShader } from 'three/addons/shaders/VerticalTiltShiftShader.js';
 
 const GradeShader = {
-  uniforms: { tDiffuse: { value: null }, saturation: { value: 1.14 }, vignette: { value: 0.22 }, fade: { value: 0 } },
+  uniforms: { tDiffuse: { value: null }, saturation: { value: 1.02 }, vignette: { value: 0.22 }, fade: { value: 0 } },
   vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
   fragmentShader: `
     uniform sampler2D tDiffuse; uniform float saturation; uniform float vignette; uniform float fade;

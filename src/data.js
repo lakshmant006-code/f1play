@@ -13,6 +13,22 @@ export const PALETTE = {
   carbon: '#1C1D20',
 };
 
+// Scenery palette: muted, painterly tones (warm haze, olive greens, dark
+// earth) so the bright team liveries pop against it.
+export const SCENERY = {
+  skyTop: '#DCDDD8',
+  skyMid: '#EDE7DB',
+  skyLow: '#E4DCCD',
+  fog: '#E9E2D5',
+  grassDark: '#4F7534',
+  grass: '#6A9243',
+  grassLight: '#8AAA57',
+  meadow: '#9DB266',
+  soil: '#5E4330',
+  cliff: '#6E5039',
+  cliffDark: '#35261C',
+};
+
 export const COMPOUNDS = {
   soft: { name: 'Soft', band: 'Red', hex: '#E03A3A' },
   medium: { name: 'Medium', band: 'Yellow', hex: '#F5C518' },
