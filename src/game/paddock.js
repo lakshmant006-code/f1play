@@ -195,7 +195,8 @@ export function buildTeams(scene, { track, pit }) {
       }
       const s = seatPos(i);
       // Hips sit on the stool top.
-      actor.place(V(DECK_X[k] + s.x, s.y + 0.03 - 0.86, DECK_Z + s.z), 0);
+      const hipH = actor.person.bones.hips.position.y * actor.root.scale.y;
+      actor.place(V(DECK_X[k] + s.x, s.y + 0.06 - hipH, DECK_Z + s.z), 0);
       actor.anim.params.seated = true;
       actor.anim.snap();
       scene.add(actor.root);

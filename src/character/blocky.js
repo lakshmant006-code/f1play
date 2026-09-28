@@ -194,8 +194,13 @@ function suitMaterials(r, part, side = 0) {
 
 // ---- Model -----------------------------------------------------------------------------
 
-// Smooth rounded boxes: 4 bevel segments and a softer default radius.
-const box = (w, h, d, r = 0.03) => new RoundedBoxGeometry(w, h, d, 4, Math.min(r, w / 2 - 0.001, h / 2 - 0.001, d / 2 - 0.001));
+// Detail level: 'full' for the creator and card, 'game' (fewer segments) for
+// the dozens of people in the paddock.
+let Q = { box: 4, sph: 1 };
+const sphSeg = (n) => Math.max(8, Math.round(n * Q.sph));
+
+// Smooth rounded boxes: bevel segments and a softer default radius.
+const box = (w, h, d, r = 0.03) => new RoundedBoxGeometry(w, h, d, Q.box, Math.min(r, w / 2 - 0.001, h / 2 - 0.001, d / 2 - 0.001));
 const solid = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.6, ...o });
 
 function mesh(geo, mat, y = 0, x = 0, z = 0) {
@@ -294,7 +299,8 @@ function wheelgun(r) {
 
 // ---- Model ---------------------------------------------------------------------------------
 
-export function buildCharacter(recipe = DEFAULT_RECIPE) {
+export function buildCharacter(recipe = DEFAULT_RECIPE, { lod = 'full' } = {}) {
+  Q = lod === 'game' ? { box: 1, sph: 0.3 } : { box: 4, sph: 1 };
   const r = { ...DEFAULT_RECIPE, ...recipe };
   const root = new THREE.Group();
   root.name = `player_${r.name}`;
@@ -308,7 +314,9 @@ export function buildCharacter(recipe = DEFAULT_RECIPE) {
   belt.add(mesh(box(0.07, 0.045, 0.02, 0.005), solid('#6a6d74', { metalness: 0.5 }), 0, 0, 0.13));
   belt.position.y = 0.09;
   body.add(belt);
-  const chest = pivot(body, 0, 0.12);
+  const spine = pivot(body, 0, 0);
+  J.spine = spine;
+  const chest = pivot(spine, 0, 0.12);
   J.chest = chest;
   chest.add(mesh(box(0.46, 0.4, 0.25, 0.03), suitMaterials(r, 'torso'), 0.2));
   chest.add(mesh(box(0.22, 0.06, 0.18, 0.015), solid(r.secondary === '#FFFFFF' ? '#F2F2F0' : r.secondary), 0.42)); // collar
@@ -318,16 +326,27 @@ export function buildCharacter(recipe = DEFAULT_RECIPE) {
   const head = pivot(chest, 0, 0.45);
   J.head = head;
   const skin = solid(r.skin);
-  const skull = mesh(new THREE.SphereGeometry(0.16, 28, 20), skin, 0.15);
+  const skull = mesh(new THREE.SphereGeometry(0.16, sphSeg(28), sphSeg(20)), skin, 0.15);
   skull.scale.set(1, 1.12, 1);
   head.add(skull);
-  head.add(mesh(new THREE.CylinderGeometry(0.1, 0.11, 0.14, 24), skin, -0.02)); // neck, fills the helmet's mouth opening
+  head.add(mesh(new THREE.CylinderGeometry(0.1, 0.11, 0.14, sphSeg(24)), skin, -0.02)); // neck, fills the helmet's mouth opening
   const fz = 0.162; // front of the face
-  if (!r.visorDown) {
+  const helmetOn = r.helmet !== false;
+  if (!r.visorDown || !helmetOn) {
     eyes(head, r, 0.18, fz);
     brows(head, r, 0.222, fz - 0.008);
   }
   mouth(head, r, 0.08, fz - 0.022);
+  if (!helmetOn) {
+    // Hair: a cap over the crown and back of the head, with a fringe.
+    const hairMat = solid(r.hair || '#2A1D16', { roughness: 0.8 });
+    const cap = mesh(new THREE.SphereGeometry(0.168, sphSeg(28), sphSeg(14), 0, Math.PI * 2, 0, Math.PI * 0.42), hairMat, 0.15);
+    cap.scale.set(1, 1.14, 1.02);
+    const back = mesh(new THREE.SphereGeometry(0.166, sphSeg(20), sphSeg(12), Math.PI, Math.PI, Math.PI * 0.3, Math.PI * 0.4), hairMat, 0.15);
+    back.scale.set(1, 1.12, 1.02);
+    head.add(cap, back);
+    for (const s of [1, -1]) head.add(mesh(box(0.05, 0.1, 0.12, 0.02), hairMat, 0.2, s * 0.155, -0.02)); // sideburns
+  }
 
   // Full-face helmet (after the helmet views): a smooth egg-shaped shell with
   // an eye port behind a wrap-round visor (with a raised rim and side pivots),
@@ -339,7 +358,7 @@ export function buildCharacter(recipe = DEFAULT_RECIPE) {
   egg.position.y = 0.16;
   egg.scale.set(1, 1.15, 1.08);
   helmet.add(egg);
-  const shell = solid(r.primary, { roughness: 0.28, metalness: 0.05 });
+  const shell = solid(r.helmetColor || r.primary, { roughness: 0.28, metalness: 0.05 });
   const trimMat = solid('#141416', { roughness: 0.7 });
   const R = 0.215;
   const FRONT = Math.PI / 2; // +z in sphere angles
@@ -352,7 +371,7 @@ export function buildCharacter(recipe = DEFAULT_RECIPE) {
   const T4 = Math.PI * 0.86; // shell bottom, then the neck trim
   const D = 0.05; // rim width
   const O = 0.006; // small overlap so shell bands meet without seams
-  const seg = (ph0, phLen, th0, thLen, rad = R) => new THREE.SphereGeometry(rad, 48, 32, ph0, phLen, th0, thLen);
+  const seg = (ph0, phLen, th0, thLen, rad = R) => new THREE.SphereGeometry(rad, sphSeg(48), sphSeg(32), ph0, phLen, th0, thLen);
   const add = (geo, mat, parent = egg) => {
     const m = new THREE.Mesh(geo, mat);
     m.castShadow = true;
@@ -406,7 +425,7 @@ export function buildCharacter(recipe = DEFAULT_RECIPE) {
   for (let k = 0; k < 3; k++) {
     at(new THREE.Mesh(box(0.075, 0.012, 0.006, 0.003), solid('#ffffff')), Math.PI * (0.2 + k * 0.035), FRONT + 0.06 + k * 0.03, 0.001);
   }
-  head.add(helmet);
+  if (helmetOn) head.add(helmet);
   J.helmet = helmet;
 
   // Arms: shoulder > upper arm > elbow > forearm > hand.

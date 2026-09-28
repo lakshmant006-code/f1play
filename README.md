@@ -40,11 +40,19 @@ Covers build-order steps 1 to 3 and most of 4 and 5 from the spec:
 - **Car states**: rolling (wheel spin, steering up to 25°, 2° pitch and roll),
   boost (rear flap to 60° on straights), rain (4 Hz rain light, spray), garage,
   pit stop (0.12 m lift, wheels off and on).
-- **People**: one modular kit (rigidly skinned, Mixamo bone names) for drivers,
-  engineers and crew; helmets from base color + one of 8 patterns + chin number
-  + surname. 30+ procedural clips (idle, walk, wave, helmet on/off, seated
-  driving, kneel, gun on/off, tire pull/fit, jack lift, radio talk, typing,
-  trophy lift, champagne spray and more).
+- **People**: every driver, engineer, strategist, principal and crew member is
+  a card character (the same blocky model as the creator), built from their
+  team colors and outfit: team stripes for drivers, classic suits and visor-down
+  helmets for the pit crew, hair and headsets for the pit wall. Each one is
+  baked into a single skinned mesh with a shared texture atlas (one or two
+  draw calls a person) at a lighter game detail level, and driven by the same
+  30+ procedural clips (idle, walk, wave, helmet on/off, seated driving, kneel,
+  gun on/off, tire pull/fit, jack lift, radio talk, typing, trophy lift,
+  champagne spray and more).
+- **Live styling**: 🎨 Style on a driver, the race engineer or the strategist
+  changes suit, team colour, gloves, skin, eyebrows, mouth, helmet on/off,
+  visor, helmet colour or hair on the spot; 🎨 Team kit restyles a whole pit
+  crew. Looks are saved in this browser.
 - **Launch teams**: Solaris Racing and Nordlys GP with 2 drivers and 16 crew
   each. Kestrel, Ironbark and Meridian cars sit in their garages as display pieces.
 - **Pit stop challenge**: the car boxes, you tap the four corners in the shown

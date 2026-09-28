@@ -20,7 +20,7 @@ import { h } from '../ui/ui.js';
 import { Explorer, PLACES } from '../explore.js';
 import { SoundScape } from '../audio.js';
 import { PlayerDrive } from '../drive.js';
-import { buildCharacter, animateCharacter, setPose, loadRecipe, EMOTES, PRESETS } from '../character/blocky.js';
+import { buildCharacter, animateCharacter, setPose, loadRecipe, EMOTES, PRESETS, SUITS, GLOVES, BROWS, MOUTHS, SKINS, SWATCHES } from '../character/blocky.js';
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
@@ -600,7 +600,6 @@ export class Game {
 
   showDriverCard(d) {
     const t = d.team.data;
-    const helmetImg = d.standing.person.helmetGroup?.children[0].material.map.image.toDataURL();
     const helmetOn = d.standing.person.helmetGroup?.visible;
     const unlocked = this.unlocked.includes(d.data.number);
     const emote = (name) => () => d.standing.anim.play(name);
@@ -609,10 +608,10 @@ export class Game {
       title: d.data.name,
       accent: t.primary,
       body: `<p><i>“${d.data.line}.”</i></p>
-        <div class="helmet-shot" role="img" aria-label="Helmet design: ${d.data.helmet.pattern} pattern" style="background-image:url(${helmetImg})"></div>
         <p>Signature celebration: <b>${d.data.celebration}</b> ${unlocked ? '' : '<span class="chip">🔒 unlocks after a podium</span>'}</p>`,
       actions: [
         { label: '👋 Wave', onClick: emote('wave') },
+        { label: '🎨 Style', primary: true, onClick: () => this.showStyler([d.standing.person, d.seated.person], { title: d.data.name, kicker: `#${d.data.number} · ${t.name}`, accent: t.primary, back: () => this.showDriverCard(d), focus: () => this.focusDriver(d) }) },
         {
           label: helmetOn ? '⛑ Helmet off' : '⛑ Helmet on',
           onClick: () => {
@@ -654,8 +653,74 @@ export class Game {
       body: `<p>${tip}</p><p>Next stop: <b>${COMPOUNDS[this.nextCompound[team.data.id]].name}</b> tires. Car #${team.trackCar.number} is on track.</p>`,
       actions: [
         { label: 'Start pit stop challenge', primary: true, onClick: () => this.pitChallenge.start(team) },
+        { label: '🎨 Style', onClick: () => this.showStyler([e.person], { title: 'Race engineer', kicker: team.data.name, accent: team.data.primary, back: () => this.focusEngineer(team) }) },
         { label: 'Back', onClick: () => this.goHome() },
       ],
+    });
+  }
+
+  // Live character styling: every change rebuilds the person on the spot and
+  // is saved in this browser. `people` share the look (a driver standing and
+  // seated, or a whole pit crew wearing the team kit).
+  showStyler(people, { title, kicker = '', accent, back, focus = null, kit = false }) {
+    const r = people[0].recipe;
+    const apply = (patch) => {
+      people.forEach((p) => {
+        const own = /_seated$/.test(p.root.name) ? Object.fromEntries(Object.entries(patch).filter(([k]) => k !== 'helmet' && k !== 'visorDown')) : patch;
+        p.restyle(own, { save: true });
+      });
+      this.showStyler(people, { title, kicker, accent, back, focus, kit });
+    };
+    const chips = (label, options, current, key, { swatch = false, map = (v) => v } = {}) =>
+      h(
+        'div',
+        { class: 'sty-row' },
+        h('span', { class: 'sty-label' }, label),
+        h(
+          'div',
+          { class: 'sty-opts', role: 'radiogroup', 'aria-label': label },
+          Object.entries(options).map(([v, l]) =>
+            h(
+              'button',
+              {
+                class: swatch ? 'sty-swatch' : '',
+                role: 'radio',
+                'aria-checked': String(String(current) === String(v)),
+                'aria-label': l,
+                title: l,
+                style: swatch ? { background: v } : undefined,
+                onclick: () => apply({ [key]: map(v) }),
+              },
+              swatch ? '' : l
+            )
+          )
+        )
+      );
+    const asMap = (arr) => Object.fromEntries(arr.map((c) => [c, c]));
+    const helmetOn = r.helmet !== false;
+    const rows = [
+      chips('Suit', SUITS, r.suit, 'suit'),
+      chips('Team colour', asMap(SWATCHES.slice(0, 12)), r.primary, 'primary', { swatch: true }),
+      chips('Gloves', GLOVES, r.gloves, 'gloves'),
+    ];
+    if (!kit) {
+      rows.push(
+        chips('Skin', asMap(SKINS), r.skin, 'skin', { swatch: true }),
+        chips('Eyebrows', BROWS, r.brows, 'brows'),
+        chips('Mouth', MOUTHS, r.mouth, 'mouth'),
+        chips('Helmet', { true: 'On', false: 'Off' }, helmetOn, 'helmet', { map: (v) => v === 'true' })
+      );
+      if (helmetOn) rows.push(chips('Visor', { false: 'Up', true: 'Down' }, !!r.visorDown, 'visorDown', { map: (v) => v === 'true' }), chips('Helmet colour', asMap(SWATCHES.slice(0, 12)), r.helmetColor || r.primary, 'helmetColor', { swatch: true }));
+      else rows.push(chips('Hair', asMap(HAIR), r.hair, 'hair', { swatch: true }));
+    }
+    focus?.();
+    this.ui.showCard({
+      kicker: `${kicker} · Style`,
+      title,
+      accent,
+      body: '<p>Changes show up right away and stay in this browser.</p>',
+      extra: h('div', { class: 'styler' }, rows),
+      actions: [{ label: 'Done', primary: true, onClick: back }],
     });
   }
 
@@ -684,6 +749,7 @@ export class Game {
       body: '<p>Front and rear jack, four wheel gunners, four tire changers and a release controller. Their whole job is 2.4 seconds.</p>',
       actions: [
         { label: 'Pit stop challenge', primary: true, onClick: () => this.pitChallenge.start(team) },
+        { label: '🎨 Team kit', onClick: () => this.showStyler(team.pitCrew.map((a) => a.person), { title: 'Pit crew kit', kicker: team.data.name, accent: team.data.primary, back: () => this.focusCrew(team), kit: true }) },
         { label: 'Back', onClick: () => this.goHome() },
       ],
     });
@@ -714,6 +780,7 @@ export class Game {
       body: `<table aria-label="Lap times of cars on track"><tbody>${rows || '<tr><td>No cars on track</td></tr>'}</tbody></table><p style="margin-top:10px">Tire for the next stop:</p>`,
       actions: [
         ...Object.entries(COMPOUNDS).map(([id, c]) => ({ label: c.name, pressed: id === cur, onClick: () => { this.nextCompound[team.data.id] = id; this.showStrategistCard(team); } })),
+        { label: '🎨 Style', onClick: () => this.showStyler([team.crew.strategist.person], { title: 'Strategist', kicker: team.data.name, accent: team.data.primary, back: () => this.showStrategistCard(team) }) },
         { label: 'Back', onClick: () => this.goHome() },
       ],
     });

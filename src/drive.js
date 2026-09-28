@@ -316,9 +316,9 @@ export class PlayerDrive {
     const vmaxSteer = deg(22) / (1 + Math.abs(this.v) / 14);
     this.steer += (steerIn * vmaxSteer - this.steer) * Math.min(1, dt * 5);
     const steps = 4;
-    const h = dt / steps;
+    const hs = dt / steps;
     let slip = 0;
-    for (let i = 0; i < steps; i++) slip = Math.max(slip, this.integrate(h, { throttle, brake, handbrake, mu, offTrack }));
+    for (let i = 0; i < steps; i++) slip = Math.max(slip, this.integrate(hs, { throttle, brake, handbrake, mu, offTrack }));
     const yawRate = this.r;
     this.slip = slip;
     if (brake && this.drs) this.drs = false;

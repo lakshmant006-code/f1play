@@ -211,3 +211,13 @@ body.driving .actions-top { display: none; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* Live character styler inside the info card. */
+.styler { display: grid; gap: 8px; margin-top: 6px; }
+.sty-row { display: grid; grid-template-columns: 92px 1fr; align-items: center; gap: 8px; }
+.sty-label { font-size: 12px; font-weight: 800; color: var(--ink-2); }
+.sty-opts { display: flex; flex-wrap: wrap; gap: 5px; }
+.sty-opts button { font-size: 12px; padding: 5px 9px; }
+.sty-opts button[aria-checked='true'] { background: var(--ink); color: #fff; border-color: var(--ink); }
+.sty-opts .sty-swatch { width: 22px; height: 22px; padding: 0; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px var(--line); }
+.sty-opts .sty-swatch[aria-checked='true'] { box-shadow: 0 0 0 3px var(--ink); }
