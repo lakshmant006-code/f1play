@@ -426,7 +426,8 @@ export function buildClouds(rand = rng(21)) {
   for (let k = 0; k < count; k++) {
     const a = rand() * Math.PI * 2;
     const r = 130 + rand() * 210;
-    const y = -30 + rand() * 75;
+    // Close clouds sit below the islands so they never block the view of them.
+    const y = r < 230 ? -55 + rand() * 30 : -30 + rand() * 75;
     const size = 5 + rand() * 8;
     const parts = [];
     for (let p = 0; p < per; p++) {

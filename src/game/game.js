@@ -17,6 +17,8 @@ import { createPerson, SKIN, HAIR, attachProp, setHelmet } from '../people/perso
 import { Actor } from '../people/actor.js';
 import { COMPOUNDS, DRIVERS, teamById, driverByNumber, surname, PIT } from '../data.js';
 import { h } from '../ui/ui.js';
+import { Explorer, PLACES } from '../explore.js';
+import { SoundScape } from '../audio.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const deg = THREE.MathUtils.degToRad;
@@ -61,9 +63,11 @@ export class Game {
       dom: renderer.domElement,
       post,
       onHover: (e, source) => this.onHover(e, source),
-      onEscape: () => (this.ui.modal.hidden ? this.goHome() : this.ui.closeModal()),
+      onEscape: () => (this.explorer.active ? null : this.ui.modal.hidden ? this.goHome() : this.ui.closeModal()),
     });
     this.registerInteractions();
+    this.explorer = new Explorer(this);
+    this.audio = new SoundScape(this);
     this.bindUI();
   }
 
@@ -246,6 +250,35 @@ export class Game {
         onClick: () => this.focusStrategist(team),
       });
     }
+    // Grandstand island (the whole stand).
+    const gh = new THREE.Group();
+    Interactions.proxy(gh, 31, 10, 13, 5).position.z = -5;
+    this.grandstand.add(gh);
+    I.add({
+      id: 'grandstand',
+      kind: 'place',
+      hit: gh,
+      outline: [this.grandstand],
+      accent: '#F5C518',
+      anchor: this.grandstand,
+      label: () => '🏟 Grandstand',
+      onClick: () => this.focusPlace('grandstand'),
+    });
+    // Pit building (upper floor and roof, so garages below stay clickable).
+    const pitHit = new THREE.Group();
+    pitHit.position.set(0, 0, GARAGE_FRONT_Z - GARAGE_DEPTH / 2);
+    Interactions.proxy(pitHit, 68, 4.5, GARAGE_DEPTH + 2, 7.6);
+    this.scene.add(pitHit);
+    I.add({
+      id: 'pitbuilding',
+      kind: 'place',
+      hit: pitHit,
+      outline: [],
+      accent: '#F5C518',
+      anchor: pitHit,
+      label: () => '🔧 Pit building · 5 garages',
+      onClick: () => this.focusPlace('pit'),
+    });
     // Watch tower.
     const th = new THREE.Group();
     Interactions.proxy(th, 12, 34, 12, 17);
@@ -566,6 +599,25 @@ export class Game {
     return cars.sort((a, b) => (b.drive.time - b.drive.lapStart) - (a.drive.time - a.drive.lapStart) || a.number - b.number);
   }
 
+  // Card for an area with a Walk in button.
+  focusPlace(id) {
+    const place = PLACES[id];
+    this.focus = { kind: 'place', id };
+    const target = id === 'grandstand' ? this.grandstand.position.clone().add(V(0, 3, -4)) : V(0, 3, GARAGE_FRONT_Z);
+    this.focusView(target, { distance: id === 'pit' ? 70 : 48, elevation: 26, azimuth: id === 'pit' ? 0.2 : 0.35 });
+    this.ui.showCard({
+      kicker: 'Area',
+      title: place.name,
+      accent: '#F5C518',
+      body: `<p>${place.blurb}</p>`,
+      actions: [
+        { label: '🚶 Walk in', primary: true, onClick: () => this.explorer.enter(id) },
+        ...(id === 'pit' ? this.teams.filter((t) => t.launch).map((t) => ({ label: `${t.data.name} crew`, onClick: () => this.focusCrew(t) })) : []),
+        { label: 'Back', onClick: () => this.goHome() },
+      ],
+    });
+  }
+
   focusTower() {
     this.focus = { kind: 'tower' };
     this.focusView(this.tower.position.clone().add(V(0, 17, 0)), { distance: 85, elevation: 22, azimuth: this.tower.rotation.y + 0.3, minEl: 10 });
@@ -578,7 +630,8 @@ export class Game {
       accent: '#0E1B2B',
       body: `<table aria-label="Running order"><tbody>${rows || '<tr><td>No cars running</td></tr>'}</tbody></table>`,
       actions: [
-        { label: 'View from the tower', primary: true, onClick: () => { this.rig.setElevationRange(10, 70); this.rig.goTo({ target: V(0, 0, -5), distance: 70, elevation: deg(38), azimuth: this.tower.rotation.y + Math.PI }); } },
+        { label: '🚶 Walk in', primary: true, onClick: () => this.explorer.enter('tower') },
+        { label: 'View from the tower', onClick: () => { this.rig.setElevationRange(10, 70); this.rig.goTo({ target: V(0, 0, -5), distance: 70, elevation: deg(38), azimuth: this.tower.rotation.y + Math.PI }); } },
         { label: 'Back', onClick: () => this.goHome() },
       ],
     });
@@ -596,7 +649,8 @@ export class Game {
       accent: '#F5C518',
       body: `<p>${last ? `Last podium: ${last.map((n, i) => `${i + 1}. ${driverByNumber(n).name}`).join(' · ')}` : 'Pick who stands on steps 1 to 3. The winner sprays champagne.'}</p>`,
       actions: [
-        { label: 'Choose the podium', primary: true, onClick: () => this.choosePodium() },
+        { label: '🚶 Walk in', primary: true, onClick: () => this.explorer.enter('podium') },
+        { label: 'Choose the podium', onClick: () => this.choosePodium() },
         ...(last ? [{ label: 'Replay celebration', onClick: () => this.celebrate(last) }] : []),
         { label: 'Back', onClick: () => this.goHome() },
       ],
@@ -743,6 +797,32 @@ export class Game {
       this.setRain(!this.rain);
       rainBtn.setAttribute('aria-pressed', String(this.rain));
     });
+    document.getElementById('btn-explore').addEventListener('click', () => {
+      const content = h(
+        'div',
+        {},
+        h('h2', {}, 'Walk in'),
+        h('p', {}, 'Pick an island to explore on foot.'),
+        h('div', { class: 'place-list' }, Object.entries(PLACES).map(([id, p]) => h('button', { class: 'place', onclick: () => { this.ui.closeModal(); this.explorer.enter(id); } }, h('b', {}, p.name), h('span', {}, p.blurb)))),
+        h('div', { class: 'row' }, h('button', { onclick: () => this.ui.closeModal() }, 'Cancel'))
+      );
+      this.ui.openModal(content);
+    });
+    // View controls: rotate the islands, tilt, turntable, reset.
+    const autoBtn = h('button', { 'aria-pressed': 'false', title: 'Turntable', 'aria-label': 'Auto-rotate the islands', onclick: () => this.rig.setAutoRotate(!this.rig.controls.autoRotate) }, '⟳ Auto');
+    this.rig.onAutoRotate = (on) => autoBtn.setAttribute('aria-pressed', String(on));
+    const view = h(
+      'div',
+      { class: 'view-ctl panel', role: 'group', 'aria-label': 'Rotate the islands' },
+      h('button', { 'aria-label': 'Rotate left', title: 'Rotate left', onclick: () => this.rig.rotateBy(-Math.PI / 4) }, '↺'),
+      h('button', { 'aria-label': 'Rotate right', title: 'Rotate right', onclick: () => this.rig.rotateBy(Math.PI / 4) }, '↻'),
+      h('button', { 'aria-label': 'Tilt up', title: 'Look from higher', onclick: () => this.rig.tiltBy(deg(15)) }, '▲'),
+      h('button', { 'aria-label': 'Tilt down', title: 'Look from lower', onclick: () => this.rig.tiltBy(deg(-15)) }, '▼'),
+      autoBtn,
+      h('button', { 'aria-label': 'Reset view', title: 'Reset view', onclick: () => this.goHome() }, '⌂')
+    );
+    this.ui.root.append(view);
+    this.viewCtl = view;
     document.getElementById('btn-help').addEventListener('click', () => {
       this.ui.openModal(
         h(
@@ -750,7 +830,8 @@ export class Game {
           {},
           h('h2', {}, 'How to play'),
           h('ul', {}, [
-            'Drag to orbit, scroll or pinch to zoom, right drag to pan.',
+            'Drag to rotate the islands, scroll or pinch to zoom, right drag to pan. Use the ↺ ↻ ▲ ▼ buttons or ⟳ Auto for a turntable.',
+            'Click the grandstand, pit building, watch tower or podium and choose Walk in to explore on foot (WASD or arrows, drag to look).',
             'Hover or long press anything to see who it is; click or tap to visit.',
             'Tab cycles through cars, drivers and crew; Enter selects; Escape goes back.',
             'Talk to a race engineer or the pit crew to start the pit stop challenge.',
@@ -803,6 +884,8 @@ export class Game {
     }
     for (const a of this.actors) if (a.root.visible) a.update(dt);
     this.pitChallenge.update(dt);
+    this.explorer.update(dt);
+    this.audio.update(this.explorer.active);
     this.updateCelebration(dt);
     this.particles.update(dt);
     this.rainFx.update(dt, this.rig.controls.target);

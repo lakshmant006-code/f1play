@@ -51,6 +51,16 @@ Covers build-order steps 1 to 3 and most of 4 and 5 from the spec:
   order, the crew plays the 2.4 s choreography, jacks drop and the release light
   goes green. Wrong corners cost a 0.3 s fumble. Best time is saved locally and
   there's a shareable result card (holo border under 2.4 s).
+- **Rotate the islands**: drag to orbit all the way round, from nearly level to
+  overhead (8° to 85°), and scroll or pinch to zoom. The ↺ ↻ ▲ ▼ buttons step
+  the view, ⟳ Auto turns it like a turntable, and ⌂ resets it.
+- **Walk in**: click the grandstand, pit building, watch tower or podium, or use
+  the *Walk in* button, to explore that island on foot at eye level. WASD or
+  arrows walk, Shift runs, Q/E or ←/→ turn, drag looks around, and phones get
+  a joystick. You can climb the grandstand rows and the podium staircases onto
+  the balcony, take the lift up the tower to the observation deck, or jump to
+  the pit wall, the start line or either launch team's garage. Engines are
+  positioned in 3D and pitch up with speed; the crowd gets louder near the stands.
 - **Interactions**: every asset has hover (2 px rim in the team accent, 150 ms
   fade), click (0.8 s eased camera move plus an info card) and a deeper action:
   livery viewer and *Take it out* for cars, emotes and helmet off for drivers,
@@ -80,6 +90,8 @@ src/world/circuit.js   four-island layout, track bridges, grandstand, watch towe
 src/game/              layout, paths and speed profile, driving, paddock,
                        pit stop rules and challenge, game controller
 src/fx/                post stack (outline, tilt-shift, grade), particles, rain
-src/camera.js          orbit rig with eased glides
+src/camera.js          orbit rig with eased glides, rotate/tilt/turntable
+src/explore.js         walk mode: places, viewpoints, walkable surfaces, collisions
+src/audio.js           procedural engine and crowd sound
 src/interact.js        hover, click, keyboard and touch
 ```

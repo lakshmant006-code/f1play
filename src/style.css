@@ -116,6 +116,25 @@ button[aria-pressed='true'] { background: #2d7ff9; color: #fff; border-color: #2
 
 [hidden] { display: none !important; }
 
+/* View controls: rotate the islands. */
+.view-ctl { position: absolute; right: 16px; bottom: max(16px, env(safe-area-inset-bottom)); display: flex; gap: 6px; padding: 6px; border-radius: 999px; }
+.view-ctl button { min-width: 40px; padding: 8px 10px; }
+
+/* Walk mode HUD, place picker and touch joystick. */
+.walk-hud { position: absolute; left: 16px; bottom: max(16px, env(safe-area-inset-bottom)); width: min(360px, calc(100vw - 32px)); padding: 14px 16px; border-top: 6px solid #F5C518; }
+.walk-hud .kicker { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-2); }
+.walk-hud h2 { margin: 2px 0 4px; font-size: 20px; font-weight: 900; }
+.walk-hud .walk-help { margin: 0 0 8px; font-size: 13px; color: var(--ink-2); }
+.walk-hud .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.walk-hud .actions button { font-size: 13px; padding: 7px 12px; }
+button.ghost { background: transparent; }
+.place-list { display: grid; gap: 8px; margin: 10px 0; }
+.place-list .place { display: grid; gap: 2px; text-align: left; border-radius: 12px; padding: 10px 14px; }
+.place-list .place span { font-weight: 600; font-size: 13px; color: var(--ink-2); }
+.joy { position: absolute; right: 24px; bottom: 150px; width: 120px; height: 120px; border-radius: 50%; background: rgba(14, 27, 43, 0.25); border: 2px solid rgba(255, 255, 255, 0.7); touch-action: none; display: grid; place-items: center; }
+.joy-knob { width: 52px; height: 52px; border-radius: 50%; background: rgba(255, 255, 255, 0.9); box-shadow: var(--shadow); pointer-events: none; }
+body.walking .view-ctl { display: none; }
+
 @media (max-width: 640px) {
   .brand { font-size: 16px; padding: 6px 12px; }
   .actions-top button { font-size: 12px; padding: 7px 10px; }
@@ -126,6 +145,8 @@ button[aria-pressed='true'] { background: #2d7ff9; color: #fff; border-color: #2
   .hud .time { font-size: 26px; min-width: 84px; }
   .hud .meta { display: none; }
   .marker { width: 56px; height: 56px; margin: -28px 0 0 -28px; }
+  .view-ctl { bottom: auto; top: 118px; right: 16px; }
+  .view-ctl button { min-width: 34px; padding: 6px 8px; font-size: 12px; }
   .helmet-shot { height: 72px; }
   .card { max-height: 48vh; }
 }

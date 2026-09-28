@@ -34,6 +34,10 @@ export const LANDMARKS = {
 
 const inArc = (s, [a, b]) => s >= a && s <= b;
 
+// Dimensions the walk mode needs to stand on these structures.
+export const STAND = { rows: 12, rowD: 0.9, rowH: 0.45, base: 1.2 };
+export const TOWER_H = 26;
+
 // ---- Island shapes from a ground mask ---------------------------------------------------
 
 export function buildIslandShapes(track, pit, extras) {
@@ -311,10 +315,7 @@ function ribbonWall(frames, lateral, y0, y1) {
 // little people (body + head, two instanced draw calls) that cheers.
 export function buildGrandstandHD({ len = 36 } = {}) {
   const g = new THREE.Group();
-  const rows = 12;
-  const rowD = 0.9;
-  const rowH = 0.45;
-  const base = 1.2;
+  const { rows, rowD, rowH, base } = STAND;
   const terr = [];
   const seats = [];
   const aisles = [];
@@ -462,7 +463,7 @@ export function buildWatchTower() {
     mullions.push(rod(V(Math.cos(a) * 5.02, 0.3, Math.sin(a) * 5.02), V(Math.cos(a) * 5.02, 3.9, Math.sin(a) * 5.02), 0.05, 4));
   }
   // Shaft: a lathe with a gentle taper and waist.
-  const H = 26;
+  const H = TOWER_H;
   const prof = [[3.2, 4.2], [2.6, 10], [2.2, 17], [2.3, 22], [2.8, H]].map(([r, y]) => new THREE.Vector2(r, y));
   const shaft = new THREE.Mesh(new THREE.LatheGeometry(prof, 40), white);
   shaft.castShadow = true;
@@ -569,7 +570,11 @@ export function buildStartGantry(x, z) {
   const banner = new THREE.Mesh(new THREE.PlaneGeometry(span - 2, 0.9), new THREE.MeshStandardMaterial({ map: textTexture(['SKY CIRCUIT'], { w: 1024, h: 96, bg: '#0E1B2B', fg: '#F4F5F7' }), side: THREE.DoubleSide }));
   banner.rotation.y = Math.PI / 2;
   banner.position.set(0.45, 7.6, 0);
-  g.add(banner);
+  banner.material.side = THREE.FrontSide;
+  const banner2 = banner.clone();
+  banner2.rotation.y = -Math.PI / 2;
+  banner2.position.x = -0.45;
+  g.add(banner, banner2);
   g.position.set(x, 0, z);
   return g;
 }
