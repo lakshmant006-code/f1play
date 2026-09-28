@@ -1,15 +1,17 @@
 // Drive mode: take a car out and drive it yourself.
 // Cockpit view like an F1 onboard shot (halo, steering wheel with a live
-// display, front wing), plus T-cam and chase views. Arcade physics with a grip
-// limit, DRS on straights, walls at the track edge and bridge barriers, lap
-// timing with a saved best.
+// display, front wing), plus T-cam and chase views. Real-time vehicle dynamics
+// (bicycle model with slip-angle tires, friction circles, downforce, brake
+// balance, rear-wheel drive and a handbrake) so the car slides, drifts and
+// understeers; DRS on straights, walls at the track edge and bridge barriers,
+// lap timing with a saved best.
 //
-// Keys: W/↑ throttle · S/↓ brake (and reverse) · A/D or ←/→ steer · Space DRS ·
+// Keys: W/↑ throttle · S/↓ brake (and reverse) · A/D or ←/→ steer · Shift/X handbrake · Space DRS ·
 // C change camera · Esc leave. Touch: on-screen pedals and steering.
 
 import * as THREE from 'three';
 import { CAR } from './car/car.js';
-import { TRACK_WIDTH, PIT_Z, PIT_WIDTH } from './game/layout.js';
+import { TRACK_WIDTH, PIT_WALL_Z } from './game/layout.js';
 import { h } from './ui/ui.js';
 import { deg } from './geo.js';
 
@@ -114,6 +116,9 @@ export class PlayerDrive {
     this.pos = V(p.pos.x, 0, p.pos.z);
     this.heading = Math.atan2(p.tan.x, p.tan.z);
     this.v = 0;
+    this.vy = 0;
+    this.r = 0;
+    this.slip = 0;
     this.steer = 0;
     this.drs = false;
     this.flap = 0;
@@ -155,7 +160,7 @@ export class PlayerDrive {
     this.setCam('cockpit');
     this.buildHud();
     g.audio?.start();
-    g.ui.toast(`<b>${d.data.name}'s car #${car.number}.</b> W or ↑ to go, A/D to steer, Space for DRS, C for camera.`, { icon: '🏎', duration: 5000, accent: team.data.primary });
+    g.ui.toast(`<b>${d.data.name}'s car #${car.number}.</b> ${matchMedia('(pointer: coarse)').matches ? 'GAS to go, L / R to steer, DRIFT to slide, DRS on the straights.' : 'W or ↑ to go, A/D to steer, Shift to drift, Space for DRS, C for camera.'}`, { icon: '🏎', duration: 5000, accent: team.data.primary });
     this.place();
   }
 
@@ -168,6 +173,10 @@ export class PlayerDrive {
     document.body.classList.remove('walking', 'driving');
     this.hud?.remove();
     this.pads?.remove();
+    document.body.classList.remove('touch-drive');
+    this.touch = { throttle: 0, brake: 0, steer: 0, handbrake: 0 };
+    if (this.wentFullscreen && document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+    this.wentFullscreen = false;
     car.nodes.body.remove(this.wheel);
     // Back to the garage on stands.
     car.drive = this.saved;
@@ -218,14 +227,15 @@ export class PlayerDrive {
     this.lastEl = h('div', { class: 'd-small' }, 'Last --.--');
     this.bestEl = h('div', { class: 'd-small' }, `Best ${this.bestLap ? this.bestLap.time.toFixed(2) : '--.--'}`);
     this.drsEl = h('div', { class: 'd-drs' }, 'DRS');
+    this.driftEl = h('div', { class: 'd-drift', 'aria-live': 'off' }, 'DRIFT');
     this.revEl = h('div', { class: 'd-rev' }, Array.from({ length: 15 }, () => h('i')));
     this.camBtn = h('button', { onclick: () => this.setCam(CAMS[(CAMS.indexOf(this.cam) + 1) % CAMS.length]) }, 'Camera: Cockpit');
     this.hud = h(
       'div',
       { class: 'drive-hud', role: 'region', 'aria-label': 'Driving' },
       this.revEl,
-      h('div', { class: 'd-row' }, h('div', { class: 'd-col' }, this.gearEl, h('div', { class: 'd-label' }, 'GEAR')), h('div', { class: 'd-col' }, this.speedEl, h('div', { class: 'd-label' }, 'KM/H')), h('div', { class: 'd-col' }, this.lapEl, this.lastEl, this.bestEl), this.drsEl),
-      h('div', { class: 'd-help' }, matchMedia('(pointer: coarse)').matches ? 'Pedals right · steer left · DRS on straights' : 'W/↑ go · S/↓ brake · A/D steer · Space DRS · C camera · Esc leave'),
+      h('div', { class: 'd-row' }, h('div', { class: 'd-col' }, this.gearEl, h('div', { class: 'd-label' }, 'GEAR')), h('div', { class: 'd-col' }, this.speedEl, h('div', { class: 'd-label' }, 'KM/H')), h('div', { class: 'd-col' }, this.lapEl, this.lastEl, this.bestEl), this.drsEl, this.driftEl),
+      h('div', { class: 'd-help' }, matchMedia('(pointer: coarse)').matches ? 'Pedals right · steer left · Drift = handbrake' : 'W/↑ go · S/↓ brake · A/D steer · Shift/X handbrake · Space DRS · C camera · Esc leave'),
       h('div', { class: 'd-actions' }, this.camBtn, h('button', { class: 'primary', onclick: () => this.stop() }, 'Leave car'))
     );
     g.ui.root.append(this.hud);
@@ -233,27 +243,56 @@ export class PlayerDrive {
     if (matchMedia('(pointer: coarse)').matches) this.buildPads();
   }
 
+  // Touch controls (landscape only): L / R steering on the left, GAS and
+  // BRAKE on the right with a DRIFT (handbrake) button above them, and a DRS
+  // bar at the bottom centre. Slightly see-through so the track shows behind.
   buildPads() {
     this.pads?.remove();
-    const hold = (label, cls, on, off) => {
-      const b = h('button', { class: `pad ${cls}`, 'aria-label': label }, label);
-      const down = (e) => {
+    const steer = { L: 0, R: 0 };
+    const setSteer = () => (this.touch.steer = steer.L - steer.R);
+    const hold = (label, cls, on, off, aria = label) => {
+      const b = h('button', { class: `pad ${cls}`, 'aria-label': aria }, label);
+      const release = () => {
+        b.classList.remove('down');
+        off();
+      };
+      b.addEventListener('pointerdown', (e) => {
         e.preventDefault();
         b.setPointerCapture?.(e.pointerId);
+        b.classList.add('down');
         on();
-      };
-      b.addEventListener('pointerdown', down);
-      b.addEventListener('pointerup', off);
-      b.addEventListener('pointercancel', off);
+        navigator.vibrate?.(8);
+      });
+      b.addEventListener('pointerup', release);
+      b.addEventListener('pointercancel', release);
+      b.addEventListener('lostpointercapture', release);
+      b.addEventListener('contextmenu', (e) => e.preventDefault());
       return b;
     };
+    this.drsPad = hold('DRS', 'drs', () => this.toggleDrs(), () => {}, 'DRS');
     this.pads = h(
       'div',
       { class: 'drive-pads' },
-      h('div', { class: 'pads-left' }, hold('◀', 'steer', () => (this.touch.steer = 1), () => (this.touch.steer = 0)), hold('▶', 'steer', () => (this.touch.steer = -1), () => (this.touch.steer = 0))),
-      h('div', { class: 'pads-right' }, hold('DRS', 'drs', () => this.toggleDrs(), () => {}), hold('Brake', 'brake', () => (this.touch.brake = 1), () => (this.touch.brake = 0)), hold('Go', 'go', () => (this.touch.throttle = 1), () => (this.touch.throttle = 0)))
+      h('div', { class: 'pads-left' }, hold('L', 'steer', () => ((steer.L = 1), setSteer()), () => ((steer.L = 0), setSteer()), 'Steer left'), hold('R', 'steer', () => ((steer.R = 1), setSteer()), () => ((steer.R = 0), setSteer()), 'Steer right')),
+      h('div', { class: 'pads-mid' }, this.drsPad),
+      h(
+        'div',
+        { class: 'pads-right' },
+        hold('DRIFT', 'drift', () => (this.touch.handbrake = 1), () => (this.touch.handbrake = 0), 'Drift (handbrake)'),
+        hold('GAS', 'gas', () => (this.touch.throttle = 1), () => (this.touch.throttle = 0), 'Gas'),
+        hold('BRAKE', 'brake', () => (this.touch.brake = 1), () => (this.touch.brake = 0), 'Brake')
+      ),
+      h('div', { class: 'rotate-note', role: 'status' }, h('div', { class: 'rotate-icon', 'aria-hidden': 'true' }, '📱'), h('b', {}, 'Turn your phone sideways to drive'), h('span', {}, 'The controls work in landscape.'))
     );
     this.game.ui.root.append(this.pads);
+    document.body.classList.add('touch-drive');
+    // Ask for landscape where the browser allows it (needs fullscreen on most phones).
+    const lock = () => screen.orientation?.lock?.('landscape').catch(() => {});
+    if (document.fullscreenElement) lock();
+    else document.documentElement.requestFullscreen?.({ navigationUI: 'hide' }).then(() => {
+      this.wentFullscreen = true;
+      lock();
+    }).catch(() => {});
   }
 
   bindKeys() {
@@ -301,52 +340,64 @@ export class PlayerDrive {
     const offTrack = Math.abs(lat) > TRACK_WIDTH / 2 + 0.5;
     const vmax = VMAX * (this.drs ? 1.12 : 1) * (offTrack ? 0.45 : 1);
 
-    // Longitudinal.
-    let a = 0;
-    if (throttle) a += this.v < 0 ? 16 : 15 * Math.max(0, 1 - Math.pow(this.v / vmax, 2));
-    if (brake) a -= this.v > 0.5 ? 30 : 7; // brake, then reverse
-    a -= 0.002 * this.v * Math.abs(this.v) + (offTrack ? 3 * Math.sign(this.v) : 0.3 * Math.sign(this.v));
-    if (!throttle && !brake && Math.abs(this.v) < 0.4) this.v = 0;
-    this.v = THREE.MathUtils.clamp(this.v + a * dt, -8, vmax);
+    // Vehicle dynamics: a bicycle model with slip-angle tire forces, a
+    // friction circle per axle, downforce, rear-wheel drive, brake balance
+    // and a handbrake, stepped a few times per frame for stability.
+    const handbrake = k.has('shift') || k.has('x') || this.touch.handbrake ? 1 : 0;
+    const mu = (offTrack ? 0.75 : 1.65) * (g.rain ? 0.72 : 1);
+    // Less steering lock at speed, like a real wheel you feed in gently.
+    const vmaxSteer = deg(22) / (1 + Math.abs(this.v) / 14);
+    this.steer += (steerIn * vmaxSteer - this.steer) * Math.min(1, dt * 5);
+    const steps = 4;
+    const hs = dt / steps;
+    let slip = 0;
+    for (let i = 0; i < steps; i++) slip = Math.max(slip, this.integrate(hs, { throttle, brake, handbrake, mu, offTrack }));
+    const yawRate = this.r;
+    this.slip = slip;
     if (brake && this.drs) this.drs = false;
     if (this.drs && Math.abs(smp.curv) > 0.03) this.drs = false;
-
-    // Steering: less lock at speed, and yaw limited by grip.
-    const maxSteer = deg(25) * (1 - Math.min(0.75, Math.abs(this.v) / VMAX * 0.8));
-    this.steer += (steerIn * maxSteer - this.steer) * Math.min(1, dt * 8);
-    let yawRate = (this.v * Math.tan(this.steer)) / CAR.wheelbase;
-    const grip = offTrack ? 9 : 24;
-    const maxYaw = grip / Math.max(3, Math.abs(this.v));
-    yawRate = THREE.MathUtils.clamp(yawRate, -maxYaw, maxYaw);
-    this.heading += yawRate * dt;
-    const fwd = V(Math.sin(this.heading), 0, Math.cos(this.heading));
-    this.pos.addScaledVector(fwd, this.v * dt);
+    // Tire smoke when the tires slide.
+    if (slip > 0.14 && Math.abs(this.v) > 6 && !offTrack) {
+      const back = V(Math.sin(this.heading), 0, Math.cos(this.heading)).multiplyScalar(-1.6);
+      for (const sd of [-0.8, 0.8]) {
+        const side = V(Math.cos(this.heading), 0, -Math.sin(this.heading)).multiplyScalar(sd);
+        g.particles.emit({ pos: this.pos.clone().add(back).add(side).setY(0.3), vel: V(0, 1.2, 0), color: ['#e9ecef', '#d6d9dd', '#ffffff'], life: 0.8, size: 0.32, gravity: 0.6, drag: 2.2, spread: 1.2, count: 1, jitter: 0.3 });
+      }
+    }
 
     // Walls: track-edge limit (tighter on bridges), and the pit wall.
     const onIsland = g.onIsland(smp.pos.x + n.x * lat, smp.pos.z + n.z * lat);
     const limit = onIsland ? TRACK_WIDTH / 2 + 4.8 : TRACK_WIDTH / 2 + 1.5;
     const lat2 = this.pos.clone().sub(smp.pos).dot(n);
-    const pitWallZ = PIT_Z + PIT_WIDTH / 2 + 1.7;
+    const pitWallZ = PIT_WALL_Z + 1.1;
     let hit = false;
+    // World velocity, to tell a real impact from sliding along a wall.
+    const fwdW = V(Math.sin(this.heading), 0, Math.cos(this.heading));
+    const leftW = V(Math.cos(this.heading), 0, -Math.sin(this.heading));
+    const velW = fwdW.clone().multiplyScalar(this.v).addScaledVector(leftW, this.vy);
+    let into = 0;
     if (Math.abs(lat2) > limit) {
       this.pos.addScaledVector(n, (Math.sign(lat2) * limit - lat2));
-      hit = true;
+      into = Math.max(into, velW.dot(n) * Math.sign(lat2));
     }
     if (Math.abs(this.pos.x) < 50 && this.pos.z < pitWallZ && smp.pos.z > -40) {
       this.pos.z = pitWallZ;
-      hit = true;
+      into = Math.max(into, -velW.z);
     }
+    hit = into > 1.5;
     if (hit) {
       const along = Math.atan2(smp.tan.x, smp.tan.z);
       let dh = along - this.heading;
       dh = Math.atan2(Math.sin(dh), Math.cos(dh));
       if (Math.abs(dh) > Math.PI / 2) dh = Math.atan2(Math.sin(dh + Math.PI), Math.cos(dh + Math.PI));
       this.heading += dh * 0.35;
-      if (Math.abs(this.v) > 6) {
+      if (into > 6) {
         this.shake = 0.35;
         g.audio?.thud?.();
       }
-      this.v *= 0.55;
+      this.v *= THREE.MathUtils.clamp(1 - into / 30, 0.45, 0.95);
+      this.vy *= 0.3;
+      this.r *= 0.3;
       this.drs = false;
     }
     // Soft bumps with the other cars.
@@ -386,6 +437,83 @@ export class PlayerDrive {
     this.place();
     this.animate(dt, offTrack);
     this.updateHud();
+  }
+
+  // One physics step. State: position, heading, forward speed v and sideways
+  // speed vy (car frame, vy > 0 to the car's left), yaw rate r. Returns the
+  // largest tire slip angle, used for smoke and the drift readout.
+  integrate(h, { throttle, brake, handbrake, mu, offTrack }) {
+    const m = 720;
+    const Iz = 1050;
+    const L = CAR.wheelbase;
+    const la = L * 0.5; // CG to front axle
+    const lb = L - la; // CG to rear axle
+    const G = 9.81;
+    const vx = this.v;
+    const speed = Math.abs(vx);
+    const down = 2.4 * vx * vx; // downforce, N
+    const Fzf = (m * G + down) * 0.46;
+    const Fzr = (m * G + down) * 0.54;
+    const fmaxF = mu * Fzf;
+    const fmaxR = mu * Fzr;
+    const vmax = VMAX * (this.drs ? 1.12 : 1) * (offTrack ? 0.5 : 1);
+    // Longitudinal forces.
+    let Fxr = 0;
+    let Fxf = 0;
+    if (throttle) {
+      if (vx < -0.5) Fxr = 0.9 * fmaxR;
+      else {
+        const P = 400000 * (this.drs ? 1.05 : 1);
+        Fxr = Math.min(9500, P / Math.max(speed, 1)) * Math.max(0, 1 - Math.pow(Math.max(0, vx) / vmax, 6));
+        Fxr = Math.min(Fxr, 0.8 * fmaxR); // traction control
+      }
+    }
+    if (brake) {
+      if (vx > 0.5) {
+        const B = 1.6 * (m * G + down) * (offTrack ? 0.5 : 1);
+        Fxf -= Math.min(B * 0.58, 0.95 * fmaxF);
+        Fxr -= Math.min(B * 0.42, 0.95 * fmaxR);
+      } else if (vx > -8) Fxr -= 4200; // reverse
+    }
+    // Traction control also backs off power while the rear is sliding (not on the handbrake).
+    const arNow = speed > 2 ? Math.atan2(this.vy - lb * this.r, speed) : 0;
+    if (Fxr > 0 && !handbrake) Fxr *= 1 - THREE.MathUtils.clamp(Math.abs(arNow) / 0.3, 0, 0.85);
+    if (handbrake && speed > 0.5) Fxr = -Math.sign(vx) * 0.45 * fmaxR;
+    // Lateral forces from slip angles, capped by what the friction circle leaves.
+    let Fyf = 0;
+    let Fyr = 0;
+    let slip = 0;
+    if (speed > 2) {
+      const af = Math.atan2(this.vy + la * this.r, speed) - this.steer * Math.sign(vx);
+      const ar = Math.atan2(this.vy - lb * this.r, speed);
+      slip = Math.max(Math.abs(ar), Math.abs(af) * 0.8);
+      const capF = fmaxF * Math.sqrt(Math.max(0.3, 1 - (Fxf / fmaxF) ** 2));
+      const capR = fmaxR * Math.sqrt(Math.max(0.3, 1 - (Fxr / fmaxR) ** 2)) * (handbrake ? 0.55 : 1);
+      Fyf = THREE.MathUtils.clamp(-62000 * af, -capF, capF);
+      Fyr = THREE.MathUtils.clamp(-95000 * ar, -capR, capR);
+    }
+    const drag = (3.9 * (this.drs ? 0.8 : 1) * vx * Math.abs(vx)) + (offTrack ? 900 : 180) * Math.sign(vx);
+    const cs = Math.cos(this.steer);
+    const sn = Math.sin(this.steer);
+    const ax = (Fxr + Fxf * cs - Fyf * sn - drag) / m + this.vy * this.r;
+    const ay = (Fyr + Fyf * cs + Fxf * sn) / m - vx * this.r;
+    const rdot = (la * (Fyf * cs + Fxf * sn) - lb * Fyr) / Iz;
+    this.v = THREE.MathUtils.clamp(vx + ax * h, -8, vmax * 1.05);
+    if (speed > 2) {
+      this.vy += ay * h;
+      this.r += rdot * h;
+    } else {
+      // Parking speeds: follow the wheels (kinematic), no sliding.
+      this.vy *= 0.8;
+      this.r = (this.v * Math.tan(this.steer)) / L;
+    }
+    if (!throttle && !brake && Math.abs(this.v) < 0.4) this.v = 0;
+    this.heading += this.r * h;
+    const fwd = V(Math.sin(this.heading), 0, Math.cos(this.heading));
+    const left = V(Math.cos(this.heading), 0, -Math.sin(this.heading));
+    this.pos.addScaledVector(fwd, this.v * h).addScaledVector(left, this.vy * h);
+    this.latG = ay;
+    return slip;
   }
 
   finishLap() {
@@ -473,8 +601,17 @@ export class PlayerDrive {
     this.lastEl.textContent = `Last ${this.lastLap ? this.lastLap.toFixed(2) : '--.--'}`;
     this.bestEl.textContent = `Best ${this.bestLap ? this.bestLap.time.toFixed(2) : '--.--'}`;
     this.drsEl.classList.toggle('on', this.drs);
+    // Drift angle between where the car points and where it travels.
+    const beta = Math.abs(Math.atan2(this.vy, Math.max(1, Math.abs(this.v))));
+    const drifting = beta > deg(7) && Math.abs(this.v) > 6;
+    this.driftEl.classList.toggle('on', drifting);
+    if (drifting) this.driftEl.textContent = `DRIFT ${Math.round((beta * 180) / Math.PI)}°`;
     const smp = this.game.track.at(this.s);
     this.drsEl.classList.toggle('avail', !this.drs && Math.abs(smp.curv) < 0.02 && this.v > 18);
+    if (this.drsPad) {
+      this.drsPad.classList.toggle('on', this.drs);
+      this.drsPad.classList.toggle('avail', this.drsEl.classList.contains('avail'));
+    }
     [...this.revEl.children].forEach((el, i) => (el.className = i < lit ? (i < 5 ? 'g' : i < 10 ? 'r' : 'b') : ''));
     // Wheel screen and LEDs, ~10 Hz.
     if (this.wheel && this.time - (this.screenAt ?? -1) > 0.1) {

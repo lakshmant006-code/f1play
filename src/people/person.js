@@ -7,6 +7,8 @@ import * as THREE from 'three';
 import { bevelBox, tint, merge } from '../geo.js';
 import { helmetGeometry, paintHelmet } from './helmet.js';
 import { PALETTE } from '../data.js';
+import { buildCharacter } from '../character/blocky.js';
+import { bakeCharacter } from '../character/bake.js';
 
 export const SKIN = ['#F3D2B6', '#E6B48F', '#C98D62', '#A86C45', '#7B4A2D', '#5A3520'];
 export const HAIR = ['#2A1D16', '#5B3A21', '#A8672F', '#D9B26A', '#1B1B1D', '#8C8C8C'];
@@ -197,7 +199,9 @@ export function propGeometry(kind, colors = {}) {
 
 // ---- Person ----------------------------------------------------------------
 
-export function createPerson(opts) {
+// The older modular kit person (one skinned mesh from capsules). The game now
+// uses the blocky card characters below; this stays for reference and tools.
+export function createKitPerson(opts) {
   const { colors, helmet = null, crewHelmet = false, props = [], name = 'person', scale = 1 } = opts;
   const root = new THREE.Group();
   root.name = name;
@@ -276,4 +280,127 @@ export function attachProp(person, kind, socketName, pos = [0, 0, 0], rot = [0, 
 
 export function setHelmet(person, on) {
   if (person.helmetGroup) person.helmetGroup.visible = on;
+}
+
+// ---- Blocky people (the card characters) ------------------------------------------
+
+// Looks people change in the game are saved per person here.
+const LOOKS_KEY = 'skycircuit.looks';
+function loadLooks() {
+  try {
+    return JSON.parse(localStorage.getItem(LOOKS_KEY) || '{}') || {};
+  } catch {
+    return {};
+  }
+}
+function saveLook(key, look) {
+  try {
+    const all = loadLooks();
+    all[key] = look;
+    localStorage.setItem(LOOKS_KEY, JSON.stringify(all));
+  } catch {
+    /* storage unavailable */
+  }
+}
+
+let faceSeed = 7;
+const faceRnd = () => ((faceSeed = (faceSeed * 16807) % 2147483647) / 2147483647);
+const SUIT_FOR = { race: 'stripes', fire: 'classic', polo: 'classic', jacket: 'star', overalls: 'diamond' };
+const light = (hex) => new THREE.Color(hex).getHSL({ h: 0, s: 0, l: 0 }).l > 0.8;
+
+// Blocky recipe from the kit's look options (team colors, outfit, helmet...).
+export function recipeFromLook(opts) {
+  const c = opts.colors;
+  const outfit = opts.outfit || 'race';
+  const driverHelmet = opts.helmet;
+  const secondary = light(c.secondary) ? '#FFFFFF' : c.secondary;
+  return {
+    suit: SUIT_FOR[outfit] || 'classic',
+    primary: light(c.primary) ? c.secondary : c.primary,
+    secondary,
+    accent: c.accent,
+    gloves: outfit === 'race' ? 'star' : outfit === 'fire' || outfit === 'overalls' ? 'dark' : 'bare',
+    skin: opts.skin || '#E6B48F',
+    hair: opts.hair || '#2A1D16',
+    brows: ['angled', 'straight', 'arched', 'none'][Math.floor(faceRnd() * 4)],
+    mouth: ['smile', 'grin', 'flat', 'smirk'][Math.floor(faceRnd() * 4)],
+    helmet: !!(driverHelmet || opts.crewHelmet),
+    helmetColor: driverHelmet?.base,
+    visorDown: !!opts.crewHelmet || /_seated$/.test(opts.name || ''),
+    visor: '#16171a',
+    prop: 'none',
+    number: driverHelmet?.number || 0,
+    name: opts.name || 'person',
+  };
+}
+
+// Bone names the animator drives, mapped to the blocky joints.
+const BONE_MAP = { hips: 'body', spine: 'spine', chest: 'chest', head: 'head', armL: 'shoulderL', foreL: 'elbowL', handL: 'handL', armR: 'shoulderR', foreR: 'elbowR', handR: 'handR', legL: 'hipL', shinL: 'kneeL', legR: 'hipR', shinR: 'kneeR' };
+
+export function createPerson(opts) {
+  const { colors, props = [], name = 'person', scale = 0.95 } = opts;
+  const root = new THREE.Group();
+  root.name = name;
+  const mk = (n, pos, sc) => {
+    const g = new THREE.Group();
+    g.name = n;
+    g.position.set(...pos);
+    g.scale.setScalar(sc);
+    return g;
+  };
+  // Sockets keep their identity across restyles, so props and anchors stay put.
+  const sockets = {
+    head: mk('head_socket', [0, 0.15, 0], 1.45),
+    handR: mk('hand_socket_R', [0, -0.07, 0.03], 1.2),
+    handL: mk('hand_socket_L', [0, -0.07, 0.03], 1.2),
+    back: mk('back_socket', [0, 0.22, -0.16], 1.2),
+  };
+  const lookKey = name.replace(/_seated$/, '');
+  const person = { root, bones: {}, sockets, opts, props: {}, lookKey, model: null, blocky: true };
+  person.recipe = { ...recipeFromLook(opts), ...(loadLooks()[lookKey] || {}) };
+  if (/_seated$/.test(name)) person.recipe.visorDown = true;
+
+  person.restyle = (patch = {}, { save = false } = {}) => {
+    person.recipe = { ...person.recipe, ...patch };
+    const model = bakeCharacter(buildCharacter(person.recipe, { lod: 'game' }));
+    const J = model.userData.joints;
+    J.head.add(sockets.head);
+    J.handR.add(sockets.handR);
+    J.handL.add(sockets.handL);
+    J.chest.add(sockets.back);
+    sockets.head.visible = person.recipe.helmet === false; // caps and headsets only without a helmet
+    // Keep the current pose so the swap doesn't pop.
+    const bones = {};
+    for (const [k, j] of Object.entries(BONE_MAP)) {
+      bones[k] = J[j];
+      if (person.bones[k]) bones[k].rotation.copy(person.bones[k].rotation);
+    }
+    if (person.bones.hips) bones.hips.position.y = person.bones.hips.position.y;
+    bones.footL = person.bones.footL || new THREE.Object3D();
+    bones.footR = person.bones.footR || new THREE.Object3D();
+    if (person.model) {
+      root.remove(person.model);
+      person.model.userData.baked?.geometry.dispose();
+    }
+    root.add(model);
+    person.model = model;
+    Object.assign(person.bones, bones);
+    if (save) {
+      const { name: _n, ...look } = person.recipe;
+      saveLook(lookKey, look);
+    }
+  };
+  // Helmet on/off reads and writes the recipe (the helmet is baked in).
+  person.helmetGroup = {
+    get visible() {
+      return person.recipe.helmet !== false;
+    },
+    set visible(on) {
+      if (on !== (person.recipe.helmet !== false)) person.restyle({ helmet: on, visorDown: false });
+    },
+  };
+  person.restyle();
+  root.scale.setScalar(scale);
+  for (const p of props) attachProp(person, p.kind, p.socket, p.pos, p.rot, colors);
+  return person;
 }

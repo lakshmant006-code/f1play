@@ -208,6 +208,8 @@ export class Animator {
     }
     const tt = !c.loop && (this.hold || c.loopHold) ? Math.min(this.t, c.dur) : this.t;
     const pose = CLIPS[this.clip].fn(tt, this.params);
+    // Seated on a stool (pit wall): keep the legs bent whatever the upper body does.
+    if (this.params.seated) Object.assign(pose, { hips: 0, legL: [-1.5, 0, 0.1], legR: [-1.5, 0, -0.1], shinL: [1.45, 0, 0], shinR: [1.45, 0, 0], footL: [0, 0, 0], footR: [0, 0, 0] });
     const k = THREE.MathUtils.clamp(1 - Math.exp(-dt * this.stiffness), 0, 1);
     const b = this.p.bones;
     for (const key of BONE_KEYS) {

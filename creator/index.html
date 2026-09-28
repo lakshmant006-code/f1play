@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sky Circuit Creator</title>
+    <meta name="description" content="Pick a Sky Circuit character and make it yours: suit, colours, gloves, face, helmet, number and name." />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet" />
+    <link href="./creator.css" rel="stylesheet" />
+  </head>
+  <body>
+    <header class="bar">
+      <a class="pill" href="/">← Sky Circuit</a>
+      <h1>Character creator</h1>
+      <a class="pill" href="/card/">🃏 Cards</a>
+    </header>
+    <main class="layout">
+      <section class="stage" aria-label="Character preview. Drag to turn.">
+        <canvas id="view"></canvas>
+        <div class="emotes" id="emotes" role="group" aria-label="Poses"></div>
+      </section>
+      <section class="panel" aria-label="Customise">
+        <h2>1 · Pick a character</h2>
+        <div class="presets" id="presets" role="radiogroup" aria-label="Preset characters"></div>
+
+        <h2>2 · Make it yours</h2>
+        <div class="field"><span>Suit</span><div class="chips" id="suit" role="radiogroup" aria-label="Suit design"></div></div>
+        <div class="field"><span>Team colour</span><div class="swatches" id="primary" role="radiogroup" aria-label="Team colour"></div></div>
+        <div class="field"><span>Suit base</span><div class="swatches" id="secondary" role="radiogroup" aria-label="Suit base colour"></div></div>
+        <div class="field"><span>Gloves</span><div class="chips" id="gloves" role="radiogroup" aria-label="Gloves"></div></div>
+        <div class="field"><span>Skin</span><div class="swatches" id="skin" role="radiogroup" aria-label="Skin tone"></div></div>
+        <div class="field"><span>Eyebrows</span><div class="chips" id="brows" role="radiogroup" aria-label="Eyebrows"></div></div>
+        <div class="field"><span>Mouth</span><div class="chips" id="mouth" role="radiogroup" aria-label="Mouth"></div></div>
+        <div class="field"><span>Visor</span><div class="chips" id="visorDown" role="radiogroup" aria-label="Visor position"></div></div>
+        <div class="field"><span>Visor tint</span><div class="swatches" id="visor" role="radiogroup" aria-label="Visor tint"></div></div>
+        <div class="field"><span>Holding</span><div class="chips" id="prop" role="radiogroup" aria-label="Prop"></div></div>
+        <div class="field two">
+          <label>Name<input id="name" maxlength="16" autocomplete="off" /></label>
+          <label>Number<input id="number" type="number" min="2" max="99" /></label>
+        </div>
+        <p class="hint" id="hint" aria-live="polite"></p>
+
+        <div class="actions">
+          <button id="random">🎲 Randomise</button>
+          <button id="save" class="primary">Save my character</button>
+        </div>
+        <p class="saved" id="saved" aria-live="polite"></p>
+      </section>
+    </main>
+    <script type="module" src="./creator.js"></script>
+  </body>
+</html>

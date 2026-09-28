@@ -8,7 +8,8 @@ import { createPerson, SKIN, HAIR } from '../people/person.js';
 import { Actor } from '../people/actor.js';
 import { bevelBox, merge, rod, tint } from '../geo.js';
 import { TEAMS, DRIVERS, surname, CORNERS } from '../data.js';
-import { GARAGE_X, PIT_Z, GARAGE_FRONT_Z } from './layout.js';
+import { GARAGE_X, PIT_Z, GARAGE_FRONT_Z, DECK_X, DECK_Z } from './layout.js';
+import { buildPitWallDeck, seatPos } from '../world/pitwall.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const GARAGE_CAR_Z = GARAGE_FRONT_Z - 4.6;
@@ -66,24 +67,6 @@ function releaseBoxProp() {
     lightMat.color.set(on ? '#35d45a' : '#ff3b30');
     lightMat.emissive.set(on ? '#35d45a' : '#ff3b30');
   };
-  return g;
-}
-
-function pitWallDesk(team) {
-  const g = new THREE.Group();
-  const deskMat = new THREE.MeshStandardMaterial({ color: '#2b2f36', roughness: 0.5 });
-  const desk = new THREE.Mesh(bevelBox(0.8, 0.9, 2.2, 0.04).translate(0, 0.45, 0), deskMat);
-  desk.castShadow = true;
-  const screenMat = new THREE.MeshStandardMaterial({ color: '#10161f', emissive: team.primary, emissiveIntensity: 0.35, roughness: 0.2 });
-  const screens = new THREE.Group();
-  for (let i = -1; i <= 1; i++) {
-    const s = new THREE.Mesh(bevelBox(0.05, 0.42, 0.62, 0.01), screenMat);
-    s.position.set(-0.15, 1.2 + (i === 0 ? 0.05 : 0), i * 0.68);
-    s.rotation.y = -i * 0.25;
-    screens.add(s);
-  }
-  g.add(desk, screens);
-  g.userData.screenMat = screenMat;
   return g;
 }
 
@@ -147,11 +130,7 @@ export function buildTeams(scene, { track, pit }) {
     add('engineer', new Actor(eng, { base: 'radio_talk_loop', role: 'engineer' }), V(gx + 4.3, 0, GARAGE_FRONT_Z - 0.6), 0.3);
     const strat = crewPerson(t, 'jacket', { props: [{ kind: 'glasses', socket: 'head', pos: [0, 0.03, 0.125] }, { kind: 'headset', socket: 'head' }] });
     add('strategist', new Actor(strat, { base: 'typing_loop', role: 'strategist' }), V(gx - 3.9, 0, GARAGE_FRONT_Z - 2.3), -Math.PI / 2);
-    const desk = pitWallDesk(t);
-    desk.position.set(gx - 4.9, 0, GARAGE_FRONT_Z - 2.3);
-    scene.add(desk);
-    team.desk = desk;
-    const boss = crewPerson(t, 'jacket', { props: [{ kind: 'cap', socket: 'head', pos: [0, 0.02, 0] }] });
+    const boss = crewPerson(t, 'jacket', { props: [{ kind: 'cap', socket: 'head', pos: [0, 0.02, 0] }, { kind: 'headset', socket: 'head' }] });
     add('principal', new Actor(boss, { base: 'arms_crossed_loop', role: 'principal' }), V(gx + 4.6, 0, GARAGE_FRONT_Z - 5.6), -Math.PI / 2);
     for (let m = 0; m < 2; m++) {
       const mech = crewPerson(t, 'overalls', { props: [{ kind: 'cap', socket: 'head' }, { kind: 'wrench', socket: 'handR', pos: [0, -0.05, 0.05], rot: [Math.PI / 2, 0, 0] }] });
@@ -194,6 +173,34 @@ export function buildTeams(scene, { track, pit }) {
     }
 
     team.trackCar = trackCar;
+  });
+
+  // Pit wall decks for the first four teams, side by side. Launch teams seat
+  // their race engineer, strategist and team principal there; everyone else
+  // on the decks is a data engineer.
+  teams.slice(0, DECK_X.length).forEach((team, k) => {
+    const t = team.data;
+    const deck = buildPitWallDeck(t);
+    deck.position.set(DECK_X[k], 0, DECK_Z);
+    scene.add(deck);
+    team.desk = deck;
+    team.deckCrew = [];
+    const roles = ['data', 'engineer', 'principal', 'strategist', 'data'];
+    roles.forEach((role, i) => {
+      let actor = team.crew[role];
+      if (!actor) {
+        const p = crewPerson(t, i % 2 ? 'jacket' : 'polo', { props: [{ kind: 'headset', socket: 'head' }] });
+        actor = new Actor(p, { base: 'typing_loop', role: 'data_engineer' });
+        team.deckCrew.push(actor);
+      }
+      const s = seatPos(i);
+      // Hips sit on the stool top.
+      const hipH = actor.person.bones.hips.position.y * actor.root.scale.y;
+      actor.place(V(DECK_X[k] + s.x, s.y + 0.06 - hipH, DECK_Z + s.z), 0);
+      actor.anim.params.seated = true;
+      actor.anim.snap();
+      scene.add(actor.root);
+    });
   });
   return teams;
 }

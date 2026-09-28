@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 import { LANDMARKS, STAND, TOWER_H } from './world/circuit.js';
 import { PODIUM_HEIGHT } from './world/podium.js';
-import { GARAGE_X, GARAGE_FRONT_Z, GARAGE_DEPTH, PIT_Z, PIT_WIDTH, TRACK_WIDTH } from './game/layout.js';
+import { GARAGE_X, GARAGE_FRONT_Z, GARAGE_DEPTH, PIT_WALL_Z, DECK_X, DECK_Z, DECK_W, DECK_D, DECK_H, TRACK_WIDTH } from './game/layout.js';
 import { h } from './ui/ui.js';
 import { reducedMotion } from './camera.js';
 
@@ -65,7 +65,7 @@ export const PLACES = {
     views: [
       { label: 'Solaris garage', go: () => ({ x: GARAGE_X[0] + 2.8, y: 0, z: GARAGE_FRONT_Z - 1, yaw: yawTo(0, 0, -0.5, -1) }) },
       { label: 'Nordlys garage', go: () => ({ x: GARAGE_X[1] + 2.8, y: 0, z: GARAGE_FRONT_Z - 1, yaw: yawTo(0, 0, -0.5, -1) }) },
-      { label: 'Pit wall', go: () => ({ x: -4, y: 0, z: PIT_Z + PIT_WIDTH / 2 + 0.4, yaw: yawTo(0, 0, 0, 1) }) },
+      { label: 'Pit wall', go: () => ({ x: DECK_X[1] + 0.9, y: DECK_H, z: DECK_Z - 0.9, yaw: yawTo(0, 0, 0, 1) }) },
       { label: 'Start line', go: () => ({ x: -16, y: 0, z: -35 + TRACK_WIDTH / 2 + 1.5, yaw: yawTo(0, 0, 1, -0.1) }) },
     ],
   },
@@ -144,6 +144,9 @@ export class Explorer {
     const onTrack = Math.hypot(smp.pos.x - x, smp.pos.z - z) < TRACK_WIDTH / 2 + 2;
     if (g.onIsland(x, z) || onTrack) out.push(0);
 
+    // Pit wall decks.
+    for (const dx of DECK_X) if (Math.abs(x - dx) < DECK_W / 2 && Math.abs(z - DECK_Z) < DECK_D / 2) out.push(DECK_H);
+
     // Grandstand terraces.
     const gs = LANDMARKS.grandstand;
     let l = toLocal(gs, x, z);
@@ -191,7 +194,14 @@ export class Explorer {
         if (dividers.some((d) => Math.abs(x - d) < 0.45)) return true;
       }
     }
-    if (Math.abs(z - (PIT_Z + PIT_WIDTH / 2 + 1.2)) < 0.4 && Math.abs(x) < 50) return true;
+    if (Math.abs(z - PIT_WALL_Z) < 0.4 && Math.abs(x) < 50) return true;
+    // Pit wall decks: the desk along the front, glass ends and roof posts.
+    for (const dx of DECK_X) {
+      const lx = x - dx;
+      const lz = z - DECK_Z;
+      if (Math.abs(lx) < DECK_W / 2 && lz > 0.55 && lz < DECK_D / 2 + 0.1) return true;
+      if (Math.abs(Math.abs(lx) - DECK_W / 2) < 0.15 && Math.abs(lz) < DECK_D / 2) return true;
+    }
     // Parked garage cars.
     for (const t of this.game.teams) {
       const c = t.garageCar;

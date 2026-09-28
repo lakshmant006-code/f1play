@@ -20,6 +20,9 @@ import { h } from '../ui/ui.js';
 import { Explorer, PLACES } from '../explore.js';
 import { SoundScape } from '../audio.js';
 import { PlayerDrive } from '../drive.js';
+import { buildCharacter, animateCharacter, setPose, loadRecipe, EMOTES, PRESETS, SUITS, GLOVES, BROWS, MOUTHS, SKINS, SWATCHES } from '../character/blocky.js';
+
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const deg = THREE.MathUtils.degToRad;
@@ -66,6 +69,7 @@ export class Game {
       onHover: (e, source) => this.onHover(e, source),
       onEscape: () => (this.explorer.active || this.player.active ? null : this.ui.modal.hidden ? this.goHome() : this.ui.closeModal()),
     });
+    this.addMyCharacter();
     this.registerInteractions();
     this.explorer = new Explorer(this);
     this.audio = new SoundScape(this);
@@ -146,6 +150,7 @@ export class Game {
     const n = this.teams.filter((t) => t.launch).length;
     let k = 0;
     for (const team of this.teams) {
+      this.actors.push(...(team.deckCrew || []));
       if (!team.launch) continue;
       const tc = team.trackCar;
       tc.drive = new CarDriver(tc, this.track, this.pit, { s: 60 + (k * this.track.length) / n, pace: 1 });
@@ -159,6 +164,52 @@ export class Game {
       }
       this.actors.push(...team.crewList);
     }
+  }
+
+  // The player's own character from the creator, standing by the first team's garage.
+  addMyCharacter() {
+    const saved = loadRecipe();
+    if (!saved?.recipe) return;
+    const team = this.teams.find((t) => t.launch);
+    const r = saved.recipe;
+    const me = buildCharacter(r);
+    me.position.set(team.garageCar.root.position.x + 3.6, 0, GARAGE_FRONT_Z - 2.6);
+    me.rotation.y = -0.25;
+    me.traverse((o) => o.isMesh && (o.castShadow = true));
+    this.scene.add(me);
+    this.me = { root: me, recipe: r };
+    const hit = new THREE.Group();
+    Interactions.proxy(hit, 0.8, 1.8, 0.8);
+    me.add(hit);
+    this.interactions.add({
+      id: 'me',
+      kind: 'driver',
+      hit,
+      outline: [me],
+      accent: r.primary,
+      anchor: me.userData.joints.head,
+      label: () => `<span class="num" style="background:${r.primary}">${r.number}</span>${esc(r.name)} · you`,
+      pulse: true,
+      onClick: () => this.focusMe(),
+    });
+  }
+
+  focusMe() {
+    const { root, recipe: r } = this.me;
+    this.focus = { kind: 'me' };
+    const head = root.userData.joints.head.getWorldPosition(V(0, 0, 0));
+    this.focusView(head.clone().add(V(0, -0.35, 0)), { distance: 3.6, elevation: 16, azimuth: root.rotation.y + 0.35, minEl: 8 });
+    this.ui.showCard({
+      kicker: `#${r.number} · ${PRESETS[r.preset]?.role || 'Driver'} · Sky Circuit`,
+      title: r.name,
+      accent: r.primary,
+      body: '<p>Your character from the creator.</p>',
+      actions: [
+        ...['wave', 'thumbs', 'jump', 'akimbo'].map((id) => ({ label: EMOTES[id], onClick: () => setPose(root, id) })),
+        { label: '✏️ Edit character', primary: true, onClick: () => (location.href = '/creator/') },
+        { label: 'Back', onClick: () => this.goHome() },
+      ],
+    });
   }
 
   // ---- Interactions -------------------------------------------------------------
@@ -549,7 +600,6 @@ export class Game {
 
   showDriverCard(d) {
     const t = d.team.data;
-    const helmetImg = d.standing.person.helmetGroup?.children[0].material.map.image.toDataURL();
     const helmetOn = d.standing.person.helmetGroup?.visible;
     const unlocked = this.unlocked.includes(d.data.number);
     const emote = (name) => () => d.standing.anim.play(name);
@@ -558,10 +608,10 @@ export class Game {
       title: d.data.name,
       accent: t.primary,
       body: `<p><i>“${d.data.line}.”</i></p>
-        <div class="helmet-shot" role="img" aria-label="Helmet design: ${d.data.helmet.pattern} pattern" style="background-image:url(${helmetImg})"></div>
         <p>Signature celebration: <b>${d.data.celebration}</b> ${unlocked ? '' : '<span class="chip">🔒 unlocks after a podium</span>'}</p>`,
       actions: [
         { label: '👋 Wave', onClick: emote('wave') },
+        { label: '🎨 Style', primary: true, onClick: () => this.showStyler([d.standing.person, d.seated.person], { title: d.data.name, kicker: `#${d.data.number} · ${t.name}`, accent: t.primary, back: () => this.showDriverCard(d), focus: () => this.focusDriver(d) }) },
         {
           label: helmetOn ? '⛑ Helmet off' : '⛑ Helmet on',
           onClick: () => {
@@ -603,8 +653,74 @@ export class Game {
       body: `<p>${tip}</p><p>Next stop: <b>${COMPOUNDS[this.nextCompound[team.data.id]].name}</b> tires. Car #${team.trackCar.number} is on track.</p>`,
       actions: [
         { label: 'Start pit stop challenge', primary: true, onClick: () => this.pitChallenge.start(team) },
+        { label: '🎨 Style', onClick: () => this.showStyler([e.person], { title: 'Race engineer', kicker: team.data.name, accent: team.data.primary, back: () => this.focusEngineer(team) }) },
         { label: 'Back', onClick: () => this.goHome() },
       ],
+    });
+  }
+
+  // Live character styling: every change rebuilds the person on the spot and
+  // is saved in this browser. `people` share the look (a driver standing and
+  // seated, or a whole pit crew wearing the team kit).
+  showStyler(people, { title, kicker = '', accent, back, focus = null, kit = false }) {
+    const r = people[0].recipe;
+    const apply = (patch) => {
+      people.forEach((p) => {
+        const own = /_seated$/.test(p.root.name) ? Object.fromEntries(Object.entries(patch).filter(([k]) => k !== 'helmet' && k !== 'visorDown')) : patch;
+        p.restyle(own, { save: true });
+      });
+      this.showStyler(people, { title, kicker, accent, back, focus, kit });
+    };
+    const chips = (label, options, current, key, { swatch = false, map = (v) => v } = {}) =>
+      h(
+        'div',
+        { class: 'sty-row' },
+        h('span', { class: 'sty-label' }, label),
+        h(
+          'div',
+          { class: 'sty-opts', role: 'radiogroup', 'aria-label': label },
+          Object.entries(options).map(([v, l]) =>
+            h(
+              'button',
+              {
+                class: swatch ? 'sty-swatch' : '',
+                role: 'radio',
+                'aria-checked': String(String(current) === String(v)),
+                'aria-label': l,
+                title: l,
+                style: swatch ? { background: v } : undefined,
+                onclick: () => apply({ [key]: map(v) }),
+              },
+              swatch ? '' : l
+            )
+          )
+        )
+      );
+    const asMap = (arr) => Object.fromEntries(arr.map((c) => [c, c]));
+    const helmetOn = r.helmet !== false;
+    const rows = [
+      chips('Suit', SUITS, r.suit, 'suit'),
+      chips('Team colour', asMap(SWATCHES.slice(0, 12)), r.primary, 'primary', { swatch: true }),
+      chips('Gloves', GLOVES, r.gloves, 'gloves'),
+    ];
+    if (!kit) {
+      rows.push(
+        chips('Skin', asMap(SKINS), r.skin, 'skin', { swatch: true }),
+        chips('Eyebrows', BROWS, r.brows, 'brows'),
+        chips('Mouth', MOUTHS, r.mouth, 'mouth'),
+        chips('Helmet', { true: 'On', false: 'Off' }, helmetOn, 'helmet', { map: (v) => v === 'true' })
+      );
+      if (helmetOn) rows.push(chips('Visor', { false: 'Up', true: 'Down' }, !!r.visorDown, 'visorDown', { map: (v) => v === 'true' }), chips('Helmet colour', asMap(SWATCHES.slice(0, 12)), r.helmetColor || r.primary, 'helmetColor', { swatch: true }));
+      else rows.push(chips('Hair', asMap(HAIR), r.hair, 'hair', { swatch: true }));
+    }
+    focus?.();
+    this.ui.showCard({
+      kicker: `${kicker} · Style`,
+      title,
+      accent,
+      body: '<p>Changes show up right away and stay in this browser.</p>',
+      extra: h('div', { class: 'styler' }, rows),
+      actions: [{ label: 'Done', primary: true, onClick: back }],
     });
   }
 
@@ -633,6 +749,7 @@ export class Game {
       body: '<p>Front and rear jack, four wheel gunners, four tire changers and a release controller. Their whole job is 2.4 seconds.</p>',
       actions: [
         { label: 'Pit stop challenge', primary: true, onClick: () => this.pitChallenge.start(team) },
+        { label: '🎨 Team kit', onClick: () => this.showStyler(team.pitCrew.map((a) => a.person), { title: 'Pit crew kit', kicker: team.data.name, accent: team.data.primary, back: () => this.focusCrew(team), kit: true }) },
         { label: 'Back', onClick: () => this.goHome() },
       ],
     });
@@ -641,7 +758,7 @@ export class Game {
   focusStrategist(team) {
     this.focus = { kind: 'strategist', team };
     const st = team.crew.strategist;
-    this.focusView(st.root.position.clone().add(V(-0.6, 1.1, 0)), { distance: 5.5, elevation: 24, azimuth: -Math.PI / 2 + 0.5 });
+    this.focusView(st.root.position.clone().add(V(0, 1.1, 0.4)), { distance: 5.5, elevation: 24, azimuth: st.root.rotation.y + 0.5 });
     st.anim.play('lean_to_screen');
     this.showStrategistCard(team);
   }
@@ -663,6 +780,7 @@ export class Game {
       body: `<table aria-label="Lap times of cars on track"><tbody>${rows || '<tr><td>No cars on track</td></tr>'}</tbody></table><p style="margin-top:10px">Tire for the next stop:</p>`,
       actions: [
         ...Object.entries(COMPOUNDS).map(([id, c]) => ({ label: c.name, pressed: id === cur, onClick: () => { this.nextCompound[team.data.id] = id; this.showStrategistCard(team); } })),
+        { label: '🎨 Style', onClick: () => this.showStyler([team.crew.strategist.person], { title: 'Strategist', kicker: team.data.name, accent: team.data.primary, back: () => this.showStrategistCard(team) }) },
         { label: 'Back', onClick: () => this.goHome() },
       ],
     });
@@ -981,6 +1099,7 @@ export class Game {
       if (d.inCar && d.car.drive) d.seated.anim.params.lean = THREE.MathUtils.clamp((d.car.drive.smp.curv || 0) * 8, -1, 1);
     }
     for (const a of this.actors) if (a.root.visible) a.update(dt);
+    if (this.me) animateCharacter(this.me.root, dt);
     this.pitChallenge.update(dt);
     this.explorer.update(dt);
     this.audio.update(this.explorer.active || this.player.active);

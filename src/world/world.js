@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { bevelBox, merge, tint, rod } from '../geo.js';
 import { PALETTE, TEAMS, SCENERY } from '../data.js';
-import { TRACK_WIDTH, PIT_WIDTH, PIT_Z, GARAGE_FRONT_Z, GARAGE_DEPTH, GARAGE_X } from '../game/layout.js';
+import { TRACK_WIDTH, PIT_WIDTH, PIT_Z, PIT_WALL_Z, GARAGE_FRONT_Z, GARAGE_DEPTH, GARAGE_X } from '../game/layout.js';
 
 const mat = (color, opts = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.85, ...opts });
 
@@ -607,17 +607,17 @@ export function buildPitBuilding() {
     g.add(inner);
   });
 
-  // Pit wall with a dark fence top, and box marks in each team's slot.
-  const wall = new THREE.Mesh(bevelBox(100, 1.0, 0.6, 0.08).translate(0, 0.5, PIT_Z + PIT_WIDTH / 2 + 1.2), canopy);
+  // Pit wall on the track side with a dark fence top, and box marks in each team's slot.
+  const wall = new THREE.Mesh(bevelBox(100, 1.0, 0.6, 0.08).translate(0, 0.5, PIT_WALL_Z), canopy);
   wall.castShadow = true;
   wall.receiveShadow = true;
   g.add(wall);
   const fencePosts = [];
-  for (let x = -49; x <= 49; x += 3) fencePosts.push(rod(new THREE.Vector3(x, 1, PIT_Z + PIT_WIDTH / 2 + 1.2), new THREE.Vector3(x, 3.2, PIT_Z + PIT_WIDTH / 2 + 1.2), 0.04, 5));
-  fencePosts.push(bevelBox(100, 0.05, 0.05, 0.01).translate(0, 3.2, PIT_Z + PIT_WIDTH / 2 + 1.2));
+  for (let x = -49; x <= 49; x += 3) fencePosts.push(rod(new THREE.Vector3(x, 1, PIT_WALL_Z), new THREE.Vector3(x, 3.2, PIT_WALL_Z), 0.04, 5));
+  fencePosts.push(bevelBox(100, 0.05, 0.05, 0.01).translate(0, 3.2, PIT_WALL_Z));
   g.add(new THREE.Mesh(merge(fencePosts), mat(PALETTE.barrier, { roughness: 0.5, metalness: 0.5 })));
   const netMat = new THREE.MeshStandardMaterial({ color: PALETTE.barrier, transparent: true, opacity: 0.25, side: THREE.DoubleSide });
-  g.add(new THREE.Mesh(new THREE.PlaneGeometry(98, 2.2).translate(0, 2.1, PIT_Z + PIT_WIDTH / 2 + 1.2), netMat));
+  g.add(new THREE.Mesh(new THREE.PlaneGeometry(98, 2.2).translate(0, 2.1, PIT_WALL_Z), netMat));
 
   const marks = [];
   for (const x of GARAGE_X) {
