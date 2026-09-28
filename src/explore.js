@@ -297,6 +297,10 @@ export class Explorer {
       h('h2', {}, place.name),
       h('p', { class: 'walk-help' }, matchMedia('(pointer: coarse)').matches ? 'Joystick to walk · drag to look' : 'WASD / arrows to walk · Shift to run · drag to look'),
       h('div', { class: 'actions' }, place.views.map((v, i) => h('button', { onclick: () => this.goView(i) }, v.label))),
+      (() => {
+        const extra = g.placeActions?.(this.place) || [];
+        return extra.length ? h('div', { class: 'actions' }, extra.map((a) => h('button', { class: 'accent', onclick: a.onClick }, a.label))) : null;
+      })(),
       h('div', { class: 'actions' }, others.map(([id, p]) => h('button', { class: 'ghost', onclick: () => { this.exitQuiet(); this.enter(id); } }, `→ ${p.name.replace(' island', '')}`))),
       h('div', { class: 'actions' }, h('button', { class: 'primary', onclick: () => this.exit() }, 'Leave · back to overview'), h('button', { 'aria-pressed': String(!!g.audio?.muted), onclick: (e) => { g.audio?.toggle(); e.currentTarget.setAttribute('aria-pressed', String(g.audio?.muted)); e.currentTarget.textContent = g.audio?.muted ? 'Sound off' : 'Sound on'; } }, g.audio?.muted ? 'Sound off' : 'Sound on'))
     );

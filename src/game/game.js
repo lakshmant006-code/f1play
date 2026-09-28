@@ -91,7 +91,8 @@ export class Game {
     ];
     const shapes = buildIslandShapes(this.track, this.pit, extras);
     this.onIsland = shapes.onIsland;
-    s.add(buildIslands(shapes.outlines));
+    this.islands = buildIslands(shapes.outlines);
+    s.add(this.islands);
     s.add(buildTrackMeshes(this.track, this.pit, this.onIsland));
     s.add(buildBridges(this.track, this.onIsland));
     s.add(buildPitBuilding());
@@ -250,6 +251,24 @@ export class Game {
         onClick: () => this.focusStrategist(team),
       });
     }
+    const notWalking = () => !this.explorer?.active;
+    // Clicking anywhere on an island's ground walks you into that island.
+    const placeOf = { pit: 'pit', grandstand: 'grandstand', tower: 'tower', podium: 'podium' };
+    for (const isl of this.islands.children) {
+      const id = placeOf[isl.userData.islandId];
+      if (!id) continue;
+      I.add({
+        id: `island_${id}`,
+        kind: 'island',
+        hit: isl,
+        outline: [isl],
+        accent: '#F5C518',
+        anchor: isl.userData.anchor,
+        label: () => `🚶 ${PLACES[id].name} · click to walk in`,
+        enabled: notWalking,
+        onClick: () => this.walkInto(id),
+      });
+    }
     // Grandstand island (the whole stand).
     const gh = new THREE.Group();
     Interactions.proxy(gh, 31, 10, 13, 5).position.z = -5;
@@ -261,8 +280,9 @@ export class Game {
       outline: [this.grandstand],
       accent: '#F5C518',
       anchor: this.grandstand,
-      label: () => '🏟 Grandstand',
-      onClick: () => this.focusPlace('grandstand'),
+      label: () => '🏟 Grandstand · click to walk in',
+      enabled: notWalking,
+      onClick: () => this.walkInto('grandstand'),
     });
     // Pit building (upper floor and roof, so garages below stay clickable).
     const pitHit = new THREE.Group();
@@ -276,8 +296,9 @@ export class Game {
       outline: [],
       accent: '#F5C518',
       anchor: pitHit,
-      label: () => '🔧 Pit building · 5 garages',
-      onClick: () => this.focusPlace('pit'),
+      label: () => '🔧 Pit building · click to walk in',
+      enabled: notWalking,
+      onClick: () => this.walkInto('pit'),
     });
     // Watch tower.
     const th = new THREE.Group();
@@ -290,8 +311,9 @@ export class Game {
       outline: [this.tower],
       accent: '#F5C518',
       anchor: this.tower,
-      label: () => '🗼 Watch tower · Race control',
-      onClick: () => this.focusTower(),
+      label: () => '🗼 Watch tower · click to walk in',
+      enabled: notWalking,
+      onClick: () => this.walkInto('tower'),
     });
     // Podium.
     const ph = new THREE.Group();
@@ -304,8 +326,9 @@ export class Game {
       outline: [this.podium],
       accent: '#F5C518',
       anchor: this.podium,
-      label: () => '🏆 Podium',
-      onClick: () => this.focusPodium(),
+      label: () => '🏆 Podium · click to walk in',
+      enabled: notWalking,
+      onClick: () => this.walkInto('podium'),
     });
   }
 
@@ -328,7 +351,46 @@ export class Game {
 
   // ---- Focus views ----------------------------------------------------------------
 
+  // Extra things to do in an area, shown in the walking panel.
+  placeActions(id) {
+    if (id === 'pit') {
+      return this.teams
+        .filter((t) => t.launch)
+        .map((t) => ({ label: `Pit stop · ${t.data.name.split(' ')[0]}`, onClick: () => { this.explorer.exit(); this.after(1, () => this.pitChallenge.start(t)); } }));
+    }
+    if (id === 'tower') {
+      return [{ label: 'Live timing', onClick: () => this.showTimingModal() }];
+    }
+    if (id === 'podium') {
+      return [
+        { label: 'Choose the podium', onClick: () => this.choosePodium() },
+        ...(this.lastCelebration ? [{ label: 'Replay celebration', onClick: () => this.celebrate(this.lastCelebration) }] : []),
+      ];
+    }
+    return [];
+  }
+
+  showTimingModal() {
+    const rows = this.standings();
+    this.ui.openModal(
+      h(
+        'div',
+        {},
+        h('h2', {}, 'Live timing'),
+        h('ol', {}, rows.length ? rows.map((c) => h('li', {}, `#${c.number} ${c.driver ? c.driver.data.name : ''} · ${c.drive.lastLap ? c.drive.lastLap.toFixed(2) + ' s' : 'out lap'}`)) : h('li', {}, 'No cars running')),
+        h('div', { class: 'row' }, h('button', { class: 'primary', onclick: () => this.ui.closeModal() }, 'Close'))
+      )
+    );
+  }
+
+  walkInto(id) {
+    this.ui.hideCard();
+    this.ui.hideTag();
+    this.explorer.enter(id);
+  }
+
   focusView(target, { distance, elevation, azimuth, follow = null, minEl = 15, maxEl = 60 }) {
+    if (this.explorer?.active) return; // walking: the camera stays with you
     this.rig.setElevationRange(minEl, maxEl);
     this.rig.goTo({ target, distance, elevation: deg(elevation), azimuth, offset: V(0, 0.5, 0) }, { follow });
     this.ui.back.hidden = false;
@@ -641,6 +703,7 @@ export class Game {
 
   focusPodium() {
     this.focus = { kind: 'podium' };
+    if (this.explorer?.active) return;
     this.focusView(this.podium.position.clone().add(V(0, PODIUM_HEIGHT - 1, 0)), { distance: 30, elevation: 14, azimuth: this.podium.rotation.y - 0.35, minEl: 5 });
     const last = this.lastCelebration;
     this.ui.showCard({
@@ -831,7 +894,7 @@ export class Game {
           h('h2', {}, 'How to play'),
           h('ul', {}, [
             'Drag to rotate the islands, scroll or pinch to zoom, right drag to pan. Use the ↺ ↻ ▲ ▼ buttons or ⟳ Auto for a turntable.',
-            'Click the grandstand, pit building, watch tower or podium and choose Walk in to explore on foot (WASD or arrows, drag to look).',
+            'Click any island, the grandstand, pit building, watch tower or podium to walk straight in (WASD or arrows, drag to look, Esc to leave).',
             'Hover or long press anything to see who it is; click or tap to visit.',
             'Tab cycles through cars, drivers and crew; Enter selects; Escape goes back.',
             'Talk to a race engineer or the pit crew to start the pit stop challenge.',

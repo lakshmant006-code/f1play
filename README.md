@@ -54,12 +54,15 @@ Covers build-order steps 1 to 3 and most of 4 and 5 from the spec:
 - **Rotate the islands**: drag to orbit all the way round, from nearly level to
   overhead (8° to 85°), and scroll or pinch to zoom. The ↺ ↻ ▲ ▼ buttons step
   the view, ⟳ Auto turns it like a turntable, and ⌂ resets it.
-- **Walk in**: click the grandstand, pit building, watch tower or podium, or use
-  the *Walk in* button, to explore that island on foot at eye level. WASD or
+- **Walk in**: one click on the grandstand, pit building, watch tower, podium, or
+  anywhere on an island's ground takes you straight in to explore it on foot at
+  eye level. You can also use the *Walk in* button. WASD or
   arrows walk, Shift runs, Q/E or ←/→ turn, drag looks around, and phones get
   a joystick. You can climb the grandstand rows and the podium staircases onto
   the balcony, take the lift up the tower to the observation deck, or jump to
-  the pit wall, the start line or either launch team's garage. Engines are
+  the pit wall, the start line or either launch team's garage. The walking panel
+  also has each area's actions: a pit stop challenge for either launch team,
+  live timing at the tower, and podium picks and replays. Engines are
   positioned in 3D and pitch up with speed; the crowd gets louder near the stands.
 - **Interactions**: every asset has hover (2 px rim in the team accent, 150 ms
   fade), click (0.8 s eased camera move plus an info card) and a deeper action:

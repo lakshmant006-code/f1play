@@ -55,4 +55,6 @@ renderer.setAnimationLoop((now) => {
   post.render();
 });
 
-document.getElementById('loading').classList.add('done');
+const loading = document.getElementById('loading');
+loading.classList.add('done');
+setTimeout(() => loading.remove(), 700);

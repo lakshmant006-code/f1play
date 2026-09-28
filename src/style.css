@@ -112,7 +112,8 @@ button[aria-pressed='true'] { background: #2d7ff9; color: #fff; border-color: #2
 .modal label { display: block; font-size: 13px; font-weight: 800; margin-top: 8px; }
 
 .loading { position: absolute; inset: 0; display: grid; place-items: center; font-weight: 900; font-size: 20px; background: #E9E2D5; transition: opacity 0.5s; }
-.loading.done { opacity: 0; pointer-events: none; }
+#ui > .loading.done { opacity: 0; pointer-events: none; }
+#ui > .topbar { pointer-events: none; }
 
 [hidden] { display: none !important; }
 
@@ -128,6 +129,7 @@ button[aria-pressed='true'] { background: #2d7ff9; color: #fff; border-color: #2
 .walk-hud .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .walk-hud .actions button { font-size: 13px; padding: 7px 12px; }
 button.ghost { background: transparent; }
+button.accent { background: #F5C518; border-color: #E0B000; }
 .place-list { display: grid; gap: 8px; margin: 10px 0; }
 .place-list .place { display: grid; gap: 2px; text-align: left; border-radius: 12px; padding: 10px 14px; }
 .place-list .place span { font-weight: 600; font-size: 13px; color: var(--ink-2); }

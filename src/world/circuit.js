@@ -162,7 +162,15 @@ export function buildIslands(outlines) {
   const g = new THREE.Group();
   outlines.forEach((o, k) => {
     if (o.length < 8) return;
-    g.add(buildIsland(o, { depth: ISLANDS[k].depth, seed: 3 + k * 7 }));
+    const isl = buildIsland(o, { depth: ISLANDS[k].depth, seed: 3 + k * 7 });
+    isl.userData.islandId = ISLANDS[k].id;
+    // Label anchor at the island's centre.
+    const c = o.reduce((a, p) => a.add(p), new THREE.Vector2()).multiplyScalar(1 / o.length);
+    const anchor = new THREE.Object3D();
+    anchor.position.set(c.x, 2, c.y);
+    isl.add(anchor);
+    isl.userData.anchor = anchor;
+    g.add(isl);
   });
   return g;
 }
