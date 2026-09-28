@@ -230,7 +230,7 @@ export function buildTrackMeshes(track, pit, onIsland = () => true) {
       kerbSpots.push({ pos: smp.pos.clone(), tan: smp.tan.clone(), side, red: Math.round(s / 1.6) % 2 === 0 });
     }
   }
-  const kerbGeo = bevelBox(1.0, 0.08, 1.55, 0.02);
+  const kerbGeo = new THREE.BoxGeometry(1.0, 0.08, 1.55);
   const kerbs = new THREE.InstancedMesh(kerbGeo, mat('#ffffff', { roughness: 0.6 }), kerbSpots.length);
   const m = new THREE.Matrix4();
   const q = new THREE.Quaternion();
@@ -262,7 +262,7 @@ export function buildTrackMeshes(track, pit, onIsland = () => true) {
     for (let i = 0; i < pit.n && clear; i += 4) if (pit.pos[i].distanceTo(p) < PIT_WIDTH / 2 + 3) clear = false;
     if (clear && onIsland(p.x, p.z)) walls.push({ p, a: Math.atan2(smp.tan.x, smp.tan.z) });
   }
-  const tireGeo = new THREE.TorusGeometry(0.36, 0.17, 6, 12).rotateX(Math.PI / 2);
+  const tireGeo = new THREE.TorusGeometry(0.36, 0.17, 5, 10).rotateX(Math.PI / 2);
   const tires = new THREE.InstancedMesh(tireGeo, mat(PALETTE.barrier, { roughness: 0.9 }), walls.length * 3);
   let ti = 0;
   for (const w of walls) {
@@ -399,106 +399,6 @@ export function buildPitBuilding() {
   return g;
 }
 
-// Podium stage: navy platform with gold trim and front stairs, stepped
-// podium 1-3, a curved backdrop with an LED band, a box-truss arch overhead
-// and team flags behind.
-export function buildPodium() {
-  const g = new THREE.Group();
-  const stageH = 0.6;
-  const navy = mat('#16202E', { roughness: 0.6 });
-  const gold = new THREE.MeshStandardMaterial({ color: '#D6B24C', metalness: 0.85, roughness: 0.25 });
-  const white = mat('#F2F0EB', { roughness: 0.35 });
-  const steel = new THREE.MeshStandardMaterial({ color: '#C9CED6', metalness: 0.7, roughness: 0.3 });
-
-  // Stage and stairs.
-  const stage = new THREE.Mesh(bevelBox(13, stageH, 8, 0.08).translate(0, stageH / 2, -0.6), navy);
-  stage.castShadow = stage.receiveShadow = true;
-  const trim = new THREE.Mesh(merge([bevelBox(13.1, 0.08, 0.1, 0.02).translate(0, stageH, 3.42), bevelBox(0.1, 0.08, 8.1, 0.02).translate(6.52, stageH, -0.6), bevelBox(0.1, 0.08, 8.1, 0.02).translate(-6.52, stageH, -0.6)]), gold);
-  const stairs = [];
-  for (let k = 0; k < 3; k++) stairs.push(bevelBox(4, stageH * ((k + 1) / 3), 0.45, 0.03).translate(0, (stageH * ((k + 1) / 3)) / 2, 4.55 - k * 0.45));
-  const stairMesh = new THREE.Mesh(merge(stairs), navy);
-  stairMesh.receiveShadow = true;
-  g.add(stage, trim, stairMesh);
-
-  // Steps 1-3.
-  const heights = { 1: 1.2, 2: 0.8, 3: 0.5 };
-  const xs = { 1: 0, 2: -2.3, 3: 2.3 };
-  for (const n of [1, 2, 3]) {
-    const s = new THREE.Mesh(bevelBox(2.2, heights[n], 1.9, 0.06), white);
-    s.position.set(xs[n], stageH + heights[n] / 2, 0);
-    s.castShadow = s.receiveShadow = true;
-    const band = new THREE.Mesh(bevelBox(2.24, 0.1, 1.94, 0.02), gold);
-    band.position.set(xs[n], stageH + heights[n] - 0.065, 0);
-    const label = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.5), new THREE.MeshStandardMaterial({ map: textTexture([String(n)], { w: 128, h: 80, bg: '#F2F0EB', fg: '#16202E' }) }));
-    label.position.set(xs[n], stageH + heights[n] / 2, 0.955);
-    g.add(s, band, label);
-  }
-
-  // Curved backdrop with a glowing LED band and the Sky Circuit mark.
-  const R = 9;
-  const arc = 0.9;
-  const backGeo = new THREE.CylinderGeometry(R, R, 4.2, 40, 1, true, Math.PI - arc / 2, arc);
-  const back = new THREE.Mesh(backGeo, new THREE.MeshStandardMaterial({ color: '#16202E', side: THREE.DoubleSide, roughness: 0.55 }));
-  back.position.set(0, stageH + 2.1, R - 3.3);
-  back.castShadow = true;
-  const markTex = textTexture(['SKY CIRCUIT'], { w: 1024, h: 128, bg: '#16202E', fg: '#F4F5F7' });
-  const mark = new THREE.Mesh(new THREE.CylinderGeometry(R - 0.05, R - 0.05, 1.1, 40, 1, true, Math.PI - arc * 0.32, arc * 0.64), new THREE.MeshStandardMaterial({ map: markTex, side: THREE.BackSide, roughness: 0.5 }));
-  mark.position.copy(back.position).add(new THREE.Vector3(0, 0.9, 0));
-  const ledMat = new THREE.MeshStandardMaterial({ color: '#F5C518', emissive: '#F5C518', emissiveIntensity: 1.4, side: THREE.BackSide });
-  const led = new THREE.Mesh(new THREE.CylinderGeometry(R - 0.06, R - 0.06, 0.12, 40, 1, true, Math.PI - arc / 2, arc), ledMat);
-  led.position.copy(back.position).add(new THREE.Vector3(0, -0.4, 0));
-  // Mark reads from the front: flip it so the text isn't mirrored on the inside face.
-  mark.scale.x = -1;
-  g.add(back, mark, led);
-
-  // Box-truss arch over the stage.
-  const truss = [];
-  const legs = [-6.2, 6.2];
-  const topY = stageH + 6.2;
-  const boxTruss = (a, b, w = 0.35) => {
-    const dir = new THREE.Vector3().subVectors(b, a);
-    const len = dir.length();
-    const up = Math.abs(dir.y) > len * 0.9 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0);
-    const s1 = new THREE.Vector3().crossVectors(dir, up).normalize().multiplyScalar(w / 2);
-    const s2 = new THREE.Vector3().crossVectors(dir, s1).normalize().multiplyScalar(w / 2);
-    const corners = [s1.clone().add(s2), s1.clone().sub(s2), s1.clone().negate().sub(s2), s1.clone().negate().add(s2)];
-    for (const c of corners) truss.push(rod(a.clone().add(c), b.clone().add(c), 0.035, 5));
-    const n = Math.max(2, Math.round(len / 0.7));
-    for (let k = 0; k < n; k++) {
-      const p0 = a.clone().lerp(b, k / n);
-      const p1 = a.clone().lerp(b, (k + 1) / n);
-      truss.push(rod(p0.clone().add(corners[k % 4]), p1.clone().add(corners[(k + 1) % 4]), 0.02, 4));
-    }
-  };
-  for (const x of legs) boxTruss(new THREE.Vector3(x, stageH, -3.4), new THREE.Vector3(x, topY, -3.4));
-  boxTruss(new THREE.Vector3(legs[0], topY, -3.4), new THREE.Vector3(legs[1], topY, -3.4));
-  for (const x of legs) boxTruss(new THREE.Vector3(x, topY, -3.4), new THREE.Vector3(x, topY, 2.4));
-  boxTruss(new THREE.Vector3(legs[0], topY, 2.4), new THREE.Vector3(legs[1], topY, 2.4));
-  const trussMesh = new THREE.Mesh(merge(truss), steel);
-  trussMesh.castShadow = true;
-  g.add(trussMesh);
-  // Spot lights hanging from the front beam.
-  for (let k = -2; k <= 2; k++) {
-    const can = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.22, 0.4, 10).rotateX(0.7), mat('#1C1D20'));
-    can.position.set(k * 2.2, topY - 0.45, 2.4);
-    g.add(can);
-  }
-
-  // Team flags behind the backdrop.
-  const poles = [];
-  TEAMS.forEach((t, k) => {
-    const x = -5 + k * 2.5;
-    poles.push(rod(new THREE.Vector3(x, 0, -5.2), new THREE.Vector3(x, 8, -5.2), 0.05, 6));
-    const f = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 1, 4, 1).translate(0.8, 0, 0), new THREE.MeshStandardMaterial({ color: t.primary, side: THREE.DoubleSide, roughness: 0.7 }));
-    f.position.set(x, 7.4, -5.2);
-    f.rotation.y = 0.2;
-    g.add(f);
-  });
-  g.add(new THREE.Mesh(merge(poles), steel));
-
-  g.userData.stepTop = (n) => new THREE.Vector3(xs[n], stageH + heights[n], 0);
-  return g;
-}
 
 // Soft cumulus: smooth puffs with flat, grey-shaded bottoms, drifting slowly
 // around and between the islands.
@@ -517,8 +417,8 @@ export function buildClouds(rand = rng(21)) {
   }
   puff.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
   puff.computeVertexNormals();
-  const count = 30;
-  const per = 7;
+  const count = 22;
+  const per = 6;
   const inst = new THREE.InstancedMesh(puff, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, emissive: '#F2EBDD', emissiveIntensity: 0.35 }), count * per);
   const m = new THREE.Matrix4();
   const q = new THREE.Quaternion();

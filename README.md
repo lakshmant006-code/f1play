@@ -24,8 +24,10 @@ Covers build-order steps 1 to 3 and most of 4 and 5 from the spec:
     seated crowd that cheers, team flags and a video screen.
   - **Watch tower island**: race-control tower with a glass lobby, observation
     pod, beacon mast and a live timing board.
-  - **Podium island**: stage with podium steps 1 to 3, a truss arch, a curved LED
-    backdrop and team flags.
+  - **Podium island**: a raised balcony podium, after the Monza one. It sits
+    7 m up on a base building and overhangs a standing crowd waving flags. It has
+    a curved branded front band, a glass balustrade, steps 1 to 3, a curved LED
+    backdrop and staircases on both sides.
 
   Island shapes follow the track, and the undersides are layered soil and rock.
   The palette is warm and hazy, with olive greens and soft clouds, plus
@@ -59,8 +61,8 @@ Covers build-order steps 1 to 3 and most of 4 and 5 from the spec:
 ## Not yet done
 
 - Character creator, glTF export and LODs (build step 6).
-- Performance pass: the scene is about 390k triangles, under the 400k target,
-  but still around 390 draw calls against the target of 100. Instancing the crew
+- Performance pass: the scene is about 400k triangles, right at the 400k target,
+  and still around 420 draw calls against the target of 100. Instancing the crew
   and crowd and adding LODs is the next step.
 - The spec's open questions (working title, phones from day one, launch pair)
   are still open. The layout already works at phone width.
@@ -71,7 +73,8 @@ Covers build-order steps 1 to 3 and most of 4 and 5 from the spec:
 src/data.js            palette, teams, compounds, drivers, pit timing
 src/car/               car mesh + rig, livery atlas painter
 src/people/            person kit, helmets, animation clips, walking actors
-src/world/world.js     island builder, track surfaces, pit building, podium, clouds, sky
+src/world/world.js     island builder, track surfaces, pit building, clouds, sky
+src/world/podium.js    raised balcony podium and standing crowd
 src/world/circuit.js   four-island layout, track bridges, grandstand, watch tower,
                        start gantry, trackside boards
 src/game/              layout, paths and speed profile, driving, paddock,

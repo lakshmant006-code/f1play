@@ -29,7 +29,7 @@ export const BRIDGES = [[138, 178], [228, 262], [312, 340], [384, 412]];
 export const LANDMARKS = {
   grandstand: { x: 62, z: 0.5, rot: 0, len: 28 },
   tower: { x: -6, z: 26 },
-  podium: { x: -82, z: 21, rot: Math.PI / 2 },
+  podium: { x: -92, z: 22, rot: Math.PI / 2 },
 };
 
 const inArc = (s, [a, b]) => s >= a && s <= b;
@@ -377,7 +377,7 @@ export function buildGrandstandHD({ len = 36 } = {}) {
 
   // Crowd: body (shirt colors) and head instances, a few waving flags.
   const bodyGeo = new THREE.CapsuleGeometry(0.17, 0.28, 1, 6).translate(0, 0.38, 0);
-  const headGeo = new THREE.SphereGeometry(0.13, 6, 4).translate(0, 0.78, 0);
+  const headGeo = new THREE.IcosahedronGeometry(0.13, 0).translate(0, 0.78, 0);
   const shirts = TEAMS.flatMap((t) => [t.primary, t.primary, t.secondary, t.accent]).concat(['#ffffff', '#E8D35B', '#D96A5A', '#5A7FD9']);
   const skins = ['#F1CFB3', '#E0AE88', '#C48B63', '#9C6644', '#6E452C'];
   const people = [];

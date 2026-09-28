@@ -4,7 +4,8 @@
 // out, celebrate on the podium.
 
 import * as THREE from 'three';
-import { buildTrackMeshes, buildPitBuilding, buildPodium, buildClouds, buildSky } from '../world/world.js';
+import { buildTrackMeshes, buildPitBuilding, buildClouds, buildSky } from '../world/world.js';
+import { buildRaisedPodium, PODIUM_HEIGHT } from '../world/podium.js';
 import { buildIslandShapes, buildIslands, buildBridges, buildGrandstandHD, buildWatchTower, buildStartGantry, buildTrackBoards, LANDMARKS } from '../world/circuit.js';
 import { buildTrack, buildPitLane, PIT_WIDTH, GARAGE_FRONT_Z, GARAGE_DEPTH } from './layout.js';
 import { buildTeams } from './paddock.js';
@@ -82,7 +83,7 @@ export class Game {
       ...pitLaneExtras,
       { shape: 'rect', x0: L.grandstand.x - L.grandstand.len / 2 - 3, x1: L.grandstand.x + L.grandstand.len / 2 + 9, z0: L.grandstand.z - 15, z1: L.grandstand.z + 5, island: 1 },
       { shape: 'circle', x: L.tower.x, z: L.tower.z, r: 13, island: 2 },
-      { shape: 'rect', x0: L.podium.x - 9, x1: L.podium.x + 6, z0: L.podium.z - 10, z1: L.podium.z + 10, island: 3 },
+      { shape: 'rect', x0: L.podium.x - 14, x1: -67, z0: L.podium.z - 15, z1: L.podium.z + 15, island: 3 },
     ];
     const shapes = buildIslandShapes(this.track, this.pit, extras);
     this.onIsland = shapes.onIsland;
@@ -103,7 +104,7 @@ export class Game {
     this.tower.rotation.y = Math.PI * 0.85; // timing board faces the pit straight side
     s.add(this.tower);
 
-    this.podium = buildPodium();
+    this.podium = buildRaisedPodium();
     this.podium.position.set(L.podium.x, 0, L.podium.z);
     this.podium.rotation.y = L.podium.rot;
     s.add(this.podium);
@@ -261,7 +262,7 @@ export class Game {
     });
     // Podium.
     const ph = new THREE.Group();
-    Interactions.proxy(ph, 8, 3.5, 3.5, 1.5);
+    Interactions.proxy(ph, 17, 12, 13, 6).position.z = -3;
     this.podium.add(ph);
     I.add({
       id: 'podium',
@@ -587,7 +588,7 @@ export class Game {
 
   focusPodium() {
     this.focus = { kind: 'podium' };
-    this.focusView(this.podium.position.clone().add(V(0, 1.6, 0)), { distance: 17, elevation: 20, azimuth: this.podium.rotation.y + 0.15 });
+    this.focusView(this.podium.position.clone().add(V(0, PODIUM_HEIGHT - 1, 0)), { distance: 30, elevation: 14, azimuth: this.podium.rotation.y - 0.35, minEl: 5 });
     const last = this.lastCelebration;
     this.ui.showCard({
       kicker: 'Podium',
@@ -716,7 +717,7 @@ export class Game {
   }
 
   sparkle() {
-    const at = this.podium.position.clone().add(V(0, 2.2, 0));
+    const at = this.podium.position.clone().add(V(0, PODIUM_HEIGHT + 2.2, 0));
     this.particles.emit({ pos: at, vel: V(0, 1.2, 0), color: ['#FFD23F', '#ffffff', '#F26B1D'], life: 1.2, size: 0.12, gravity: -0.8, drag: 1.5, spread: 3, count: 40, jitter: 4 });
   }
 
@@ -806,6 +807,7 @@ export class Game {
     this.particles.update(dt);
     this.rainFx.update(dt, this.rig.controls.target);
     this.grandstand.userData.update(this.time, this.celebrating ? 1 : this.pitChallenge.phase === 'running' ? 0.6 : 0);
+    this.podium.userData.update(this.time, this.celebrating ? 1 : 0);
     this.clouds.userData.update(this.time);
     this.tower.userData.update(this.time);
     if (this.time - (this.boardDrawn ?? -9) > 1) {
