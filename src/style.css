@@ -261,3 +261,25 @@ body.touch-drive .drive-hud.compact { left: auto; right: max(10px, env(safe-area
 body.touch-drive .drive-hud.compact .d-rev, body.touch-drive .drive-hud.compact .d-row { display: none; }
 body.touch-drive .drive-hud.compact .d-actions { margin: 0; }
 body.touch-drive .drive-hud:not(.compact) { transform: translateX(-50%) scale(0.7); }
+
+/* Pit stop challenge: timer on the left, a car-shaped pad of four wheel
+   buttons (front at the top), quit on the right. The result replaces the pad. */
+.hud.pit { gap: 14px; padding: 10px 12px 10px 18px; background: rgba(14, 27, 43, 0.86); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.pit-body { min-width: 150px; }
+.hud.pit .time { text-align: left; min-width: 0; }
+.pit-pad { display: grid; grid-template-columns: 66px 30px 66px; grid-template-rows: 54px 54px; gap: 6px 8px; align-items: center; justify-items: center; }
+.pit-car { width: 26px; height: 58px; align-self: end; border-radius: 13px 13px 4px 4px; background: linear-gradient(#5b6778, #3a4556); }
+.pit-car.rear { align-self: start; border-radius: 4px 4px 8px 8px; height: 48px; }
+.pit-wheel { width: 66px; height: 54px; border-radius: 14px; border: none; font-size: 17px; font-weight: 900; background: #F5C518; color: var(--ink); touch-action: manipulation; user-select: none; -webkit-user-select: none; transition: transform 0.08s, background 0.15s; }
+.pit-wheel:active:not(:disabled) { transform: scale(0.92); }
+.pit-wheel:disabled:not(.done) { background: rgba(255, 255, 255, 0.14); color: rgba(255, 255, 255, 0.55); }
+.pit-wheel.done { background: #35b04a; color: #fff; }
+.pit-quit { width: 36px; height: 36px; padding: 0; border-radius: 50%; background: transparent; color: #fff; border: 1px solid rgba(255, 255, 255, 0.35); }
+.pit-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.hud.pit .meta b { color: #F5C518; }
+.hud.go { animation: pit-go 0.45s ease-out; }
+@keyframes pit-go { 0% { box-shadow: 0 0 0 0 rgba(53, 212, 90, 0.9); } 100% { box-shadow: 0 0 0 18px rgba(53, 212, 90, 0); } }
+@media (max-width: 520px) { .hud.pit { flex-wrap: wrap; justify-content: center; width: calc(100vw - 24px); } }
+@media (prefers-reduced-motion: reduce) { .hud.go { animation: none; } }
+/* The camera buttons step aside while the pit pad is up. */
+body:has(.hud.pit:not([hidden])) .view-ctl { display: none; }

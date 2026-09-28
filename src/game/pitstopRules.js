@@ -1,7 +1,8 @@
 // Pure rules for the pit stop challenge. Time 0 is the moment the car stops on
-// its box marks. The player taps the four corners in the shown order; each tap
-// starts that corner's gun-off / tire swap / gun-on sequence. Jacks drop once
-// every corner is done and the release light goes green right after.
+// its box marks. The player taps the four corners (in the shown order, or in
+// any order with `anyOrder`); each tap starts that corner's gun-off / tire
+// swap / gun-on sequence. Jacks drop once every corner is done and the release
+// light goes green right after.
 
 import { PIT, CORNERS } from '../data.js';
 
@@ -15,8 +16,9 @@ export function shuffledOrder(rand = Math.random) {
 }
 
 export class PitStopRun {
-  constructor(order = CORNERS, rules = PIT) {
+  constructor(order = CORNERS, rules = PIT, { anyOrder = false } = {}) {
     this.order = [...order];
+    this.anyOrder = anyOrder;
     this.rules = rules;
     this.next = 0;
     this.lockedUntil = 0;
@@ -32,10 +34,16 @@ export class PitStopRun {
     return this.order[this.next] ?? null;
   }
 
-  // Returns 'ok', 'wrong', 'locked', 'early' or 'done'.
+  // Returns 'ok', 'wrong', 'locked', 'early', 'repeat' or 'done'.
   tap(corner, t) {
     if (this.allTapped) return 'done';
     if (t < 0) return 'early';
+    if (this.anyOrder) {
+      if (this.cornerStart[corner] !== undefined) return 'repeat';
+      // Move this corner up to the next slot so `order` records the tap order.
+      const i = this.order.indexOf(corner);
+      [this.order[this.next], this.order[i]] = [this.order[i], this.order[this.next]];
+    }
     if (t < this.lockedUntil) return 'locked';
     if (corner !== this.expected) {
       this.fumbles++;

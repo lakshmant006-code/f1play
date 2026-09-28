@@ -55,10 +55,13 @@ Covers build-order steps 1 to 3 and most of 4 and 5 from the spec:
   crew. Looks are saved in this browser.
 - **Launch teams**: Solaris Racing and Nordlys GP with 2 drivers and 16 crew
   each. Kestrel, Ironbark and Meridian cars sit in their garages as display pieces.
-- **Pit stop challenge**: the car boxes, you tap the four corners in the shown
-  order, the crew plays the 2.4 s choreography, jacks drop and the release light
-  goes green. Wrong corners cost a 0.3 s fumble. Best time is saved locally and
-  there's a shareable result card (holo border under 2.4 s).
+- **Pit stop challenge**: starts instantly. After a quick fade the car rolls
+  straight into its box (no in-lap wait), then you tap the four wheels on a
+  car-shaped pad at the bottom in any order, or press Space. The crew plays the
+  2.4 s choreography, jacks drop and the release light goes green. The time,
+  grade and best show right in the pad, with one-tap *Go again*, *Share*
+  (a result card with a holo border under 2.4 s) and *Done*. Best time is
+  saved locally.
 - **Rotate the islands**: drag to orbit all the way round, from nearly level to
   overhead (8° to 85°), and scroll or pinch to zoom. The ↺ ↻ ▲ ▼ buttons step
   the view, ⟳ Auto turns it like a turntable, and ⌂ resets it.
