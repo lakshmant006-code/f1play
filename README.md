@@ -60,11 +60,20 @@ Covers build-order steps 1 to 3 and most of 4 and 5 from the spec:
     steering wheel that turns with the front wheels. Its screen shows gear,
     speed and lap time, with rev LEDs and buttons.
   - **Other cameras**: C switches to the T-cam or a chase camera.
-  - **Handling**: arcade physics with a grip limit, and DRS on the straights
-    (Space). Walls sit at the track edge and tighter barriers on the bridges.
+  - **Handling**: real-time vehicle dynamics. A bicycle model with slip-angle
+    tires and a friction circle per axle, downforce, rear-wheel drive with
+    traction control, front/rear brake balance and a handbrake (Shift or X).
+    The car slides, drifts, understeers on the brakes and needs countersteer;
+    grass and rain cut grip. Tire smoke and a drift-angle readout show the
+    slide. DRS on the straights (Space). Walls sit at the track edge and
+    tighter barriers on the bridges; sliding along a wall doesn't stop you.
   - **Lap timing** with a best lap saved on this device.
-  - **Controls**: W/↑ throttle, S/↓ brake and reverse, A/D or ←/→ to steer, Esc
-    to leave. Phones get on-screen pedals and steering.
+  - **Controls**: W/↑ throttle, S/↓ brake and reverse, A/D or ←/→ to steer,
+    Shift/X handbrake, Esc to leave. Phones get on-screen pedals, steering and
+    a Drift button.
+- **Pit wall**: four team decks side by side between the pit wall and the pit
+  lane, with the race engineer, team principal, strategist and data engineers
+  seated facing the track.
 - **Walk in**: one click on the grandstand, pit building, watch tower, podium, or
   anywhere on an island's ground takes you straight in to explore it on foot at
   eye level. You can also use the *Walk in* button. WASD or
