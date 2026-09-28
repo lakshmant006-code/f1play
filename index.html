@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#5fb2ec" />
+    <title>Sky Circuit</title>
+    <meta name="description" content="A toy-scale racing diorama on floating islands. Meet the teams, run a 2.4 second pit stop, celebrate on the podium." />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <canvas id="scene" aria-label="Sky Circuit island. Press Tab to cycle through cars, drivers and crew, Enter to select, Escape to go back." tabindex="0"></canvas>
+    <div id="ui">
+      <header class="topbar">
+        <div class="brand"><span class="mark" aria-hidden="true"></span><span>Sky Circuit</span></div>
+        <nav class="actions-top" aria-label="Game">
+          <button id="btn-pit" class="primary">Pit stop challenge</button>
+          <button id="btn-podium">Podium</button>
+          <button id="btn-rain" aria-pressed="false">Rain</button>
+          <button id="btn-help" aria-label="Controls help">?</button>
+        </nav>
+      </header>
+      <div id="loading" class="loading">Building the islands…</div>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

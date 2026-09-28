@@ -1,0 +1,20 @@
+{
+  "name": "sky-circuit",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Sky Circuit: a toy-scale racing diorama on floating islands, built procedurally in three.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "vite": "^8.3.1",
+    "vitest": "^5.0.2"
+  }
+}
