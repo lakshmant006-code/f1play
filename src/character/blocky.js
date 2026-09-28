@@ -1,6 +1,5 @@
-// Blocky low-poly driver from the character references: chamfered boxes with
-// flat shading, a big head with a painted face, a helmet with a visor band and
-// ear cups, a suit painted per body part (4 designs), belt, knee pads, gloves
+// Blocky driver from the character references: smooth rounded boxes, a big
+// head with a 3D face, a full-face helmet with a wrap-round visor, a suit painted per body part (4 designs), belt, knee pads, gloves
 // (2 designs or bare hands) and trainers. Parts hang off pivots so the model
 // can pose (hands on hips, wave, thumbs up, jump). Height is about 1.7 m.
 
@@ -21,28 +20,6 @@ function shade(hex, f) {
   const c = new THREE.Color(hex);
   c.multiplyScalar(f);
   return `#${c.getHexString()}`;
-}
-
-// Low-poly facet overlay: triangles with small brightness shifts, like the renders.
-function facets(ctx, S, seed) {
-  let s = seed;
-  const rnd = () => ((s = (s * 16807) % 2147483647) / 2147483647);
-  const n = 4;
-  const step = S / n;
-  for (let i = 0; i < n; i++) {
-    for (let j = 0; j < n; j++) {
-      const x = i * step;
-      const y = j * step;
-      for (const tri of [[[x, y], [x + step, y], [x, y + step]], [[x + step, y], [x + step, y + step], [x, y + step]]]) {
-        const v = rnd();
-        ctx.fillStyle = v < 0.5 ? `rgba(0,0,0,${(0.5 - v) * 0.12})` : `rgba(255,255,255,${(v - 0.5) * 0.14})`;
-        ctx.beginPath();
-        tri.forEach(([a, b], k) => (k ? ctx.lineTo(a, b) : ctx.moveTo(a, b)));
-        ctx.closePath();
-        ctx.fill();
-      }
-    }
-  }
 }
 
 function star(ctx, cx, cy, r) {
@@ -210,16 +187,16 @@ function suitMaterials(r, part, side = 0) {
     const map = texture(key, (ctx, S) => {
       paintSuit(ctx, S, r, part, f, outer ? 1 : -1);
       if (part === 'torso' && f === 'back') paintNumber(ctx, S, r);
-      facets(ctx, S, 7 + i * 13 + part.length * 31);
     });
-    return new THREE.MeshStandardMaterial({ map, roughness: 0.62, flatShading: true });
+    return new THREE.MeshStandardMaterial({ map, roughness: 0.62 });
   });
 }
 
 // ---- Model -----------------------------------------------------------------------------
 
-const box = (w, h, d, r = 0.02) => new RoundedBoxGeometry(w, h, d, 1, Math.min(r, w / 2 - 0.001, h / 2 - 0.001, d / 2 - 0.001));
-const solid = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.6, flatShading: true, ...o });
+// Smooth rounded boxes: 4 bevel segments and a softer default radius.
+const box = (w, h, d, r = 0.03) => new RoundedBoxGeometry(w, h, d, 4, Math.min(r, w / 2 - 0.001, h / 2 - 0.001, d / 2 - 0.001));
+const solid = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.6, ...o });
 
 function mesh(geo, mat, y = 0, x = 0, z = 0) {
   const m = new THREE.Mesh(geo, mat);
@@ -306,7 +283,7 @@ function wheelgun(r) {
   const grey = solid('#5c5f66', { roughness: 0.5, metalness: 0.4 });
   g.add(mesh(box(0.1, 0.1, 0.18, 0.02), white, 0.02, 0, 0.0)); // body
   g.add(mesh(box(0.085, 0.085, 0.1, 0.018), team, 0.02, 0, 0.13)); // nose
-  g.add(mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.07, 6).rotateX(Math.PI / 2), grey, 0.02, 0, 0.21)); // socket
+  g.add(mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.07, 16).rotateX(Math.PI / 2), grey, 0.02, 0, 0.21)); // socket
   g.add(mesh(box(0.05, 0.03, 0.06, 0.01), team, 0.085, 0, -0.03)); // vent
   g.add(mesh(box(0.06, 0.14, 0.06, 0.015), white, -0.09, 0, -0.03)); // grip
   g.add(mesh(box(0.075, 0.03, 0.08, 0.01), team, -0.17, 0, -0.03)); // base
@@ -337,11 +314,11 @@ export function buildCharacter(recipe = DEFAULT_RECIPE) {
   chest.add(mesh(box(0.22, 0.06, 0.18, 0.015), solid(r.secondary === '#FFFFFF' ? '#F2F2F0' : r.secondary), 0.42)); // collar
   chest.add(mesh(box(0.1, 0.061, 0.02, 0.005), solid(DARK), 0.42, 0, 0.085)); // collar opening
 
-  // Head: faceted oval (after the head reference), face parts, helmet.
+  // Head: smooth oval, face parts, full-face helmet.
   const head = pivot(chest, 0, 0.45);
   J.head = head;
   const skin = solid(r.skin);
-  const skull = mesh(new THREE.SphereGeometry(0.16, 9, 7), skin, 0.15);
+  const skull = mesh(new THREE.SphereGeometry(0.16, 28, 20), skin, 0.15);
   skull.scale.set(1, 1.12, 1);
   head.add(skull);
   const fz = 0.162; // front of the face
@@ -351,25 +328,42 @@ export function buildCharacter(recipe = DEFAULT_RECIPE) {
   }
   mouth(head, r, 0.08, fz - 0.022);
 
+  // Full-face helmet (after the helmet reference): an egg-shaped shell with a
+  // face window from the brow to below the mouth, a chin guard, a dark lining
+  // and a wide visor band that wraps round the front.
   const helmet = new THREE.Group();
-  const shell = solid(r.primary, { roughness: 0.35 });
-  const dome = mesh(new THREE.SphereGeometry(0.205, 11, 6, 0, Math.PI * 2, 0, Math.PI * 0.4), shell, 0.16); // stops above the brows
-  dome.scale.set(1, 1.05, 1.05);
-  helmet.add(dome);
-  for (const s of [1, -1]) {
-    helmet.add(mesh(box(0.06, 0.3, 0.22, 0.02), shell, 0.1, s * 0.19, -0.01)); // cheek guards
-    const cup = mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.04, 8), solid(DARK), 0.12, s * 0.22, 0.0);
-    cup.rotation.z = Math.PI / 2;
-    helmet.add(cup);
+  const shell = solid(r.primary, { roughness: 0.3, metalness: 0.05 });
+  const R = 0.215;
+  const WIN = Math.PI * 0.3; // half-width of the face window
+  const T0 = Math.PI * 0.4; // window top (just above the brows)
+  const T1 = Math.PI * 0.68; // window bottom (below the mouth)
+  const part = (phi0, phiLen, th0, thLen, rad = R) => new THREE.SphereGeometry(rad, 40, 28, phi0, phiLen, th0, thLen);
+  const shellParts = [
+    part(0, Math.PI * 2, 0, T0), // crown
+    part(Math.PI / 2 + WIN, Math.PI * 2 - 2 * WIN, T0, T1 - T0), // sides and back around the window
+    part(0, Math.PI * 2, T1, Math.PI * 0.9 - T1), // chin guard, open underneath for the neck
+  ];
+  for (const g of shellParts) {
+    const m = mesh(g, shell, 0.16);
+    m.scale.set(1, 1.15, 1.08);
+    helmet.add(m);
   }
-  helmet.add(mesh(box(0.36, 0.32, 0.08, 0.03), shell, 0.1, 0, -0.165)); // back of the shell
-  // Visor: a band on the brow, or pulled down over the eyes.
-  const visor = mesh(new THREE.CylinderGeometry(0.212, 0.212, r.visorDown ? 0.11 : 0.06, 14, 1, true, -Math.PI * 0.42, Math.PI * 0.84), solid(r.visor, { roughness: 0.12, metalness: r.visor === '#16171a' ? 0.4 : 0.7, side: THREE.DoubleSide }), r.visorDown ? 0.19 : 0.262);
+  const lining = mesh(new THREE.SphereGeometry(R - 0.006, 32, 20), solid('#141416', { roughness: 0.9, side: THREE.BackSide }), 0.16);
+  lining.scale.set(1, 1.15, 1.08);
+  helmet.add(lining);
+  // Visor: pulled down over the eyes, or raised onto the forehead.
+  const vT = r.visorDown ? T0 - 0.02 : Math.PI * 0.27;
+  const visor = mesh(
+    part(Math.PI / 2 - Math.PI * 0.4, Math.PI * 0.8, vT, Math.PI * 0.14, R + 0.008),
+    solid(r.visor, { roughness: 0.08, metalness: r.visor === '#16171a' ? 0.5 : 0.75, side: THREE.DoubleSide }),
+    0.16
+  );
+  visor.scale.set(1, 1.15, 1.08);
   helmet.add(visor);
-  // Sky Circuit stripe mark on the forehead.
+  // Sky Circuit stripe mark on the crown.
   for (let k = 0; k < 3; k++) {
-    const bar = mesh(new THREE.BoxGeometry(0.075, 0.012, 0.01), solid('#ffffff'), 0.345 - k * 0.022, 0.012 + k * 0.006, 0.15 - k * 0.012);
-    bar.rotation.x = -0.6;
+    const bar = mesh(box(0.075, 0.012, 0.01, 0.004), solid('#ffffff'), 0.38 - k * 0.02, 0.012 + k * 0.006, 0.105 - k * 0.012);
+    bar.rotation.x = -0.95;
     bar.rotation.z = 0.15;
     helmet.add(bar);
   }
@@ -384,7 +378,7 @@ export function buildCharacter(recipe = DEFAULT_RECIPE) {
     const elbow = pivot(shoulder, 0, -0.23);
     elbow.add(mesh(box(0.145, 0.23, 0.155, 0.025), suitMaterials(r, 'forearm', s), -0.1));
     const hand = pivot(elbow, 0, -0.23);
-    const handMat = bare ? skin : faceNames(s).map(({ f }, i) => new THREE.MeshStandardMaterial({ map: texture(`glove|${r.gloves}|${r.primary}|${f}|${i}`, (ctx, S) => paintGlove(ctx, S, r, f)), roughness: 0.6, flatShading: true }));
+    const handMat = bare ? skin : faceNames(s).map(({ f }, i) => new THREE.MeshStandardMaterial({ map: texture(`glove|${r.gloves}|${r.primary}|${f}|${i}`, (ctx, S) => paintGlove(ctx, S, r, f)), roughness: 0.6 }));
     hand.add(mesh(box(bare ? 0.12 : 0.14, 0.13, bare ? 0.12 : 0.14, 0.025), handMat, -0.05));
     J[`shoulder${side}`] = shoulder;
     J[`elbow${side}`] = elbow;
