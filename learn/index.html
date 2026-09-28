@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sky Circuit Learn</title>
+    <meta name="description" content="Explore a 2026-style race car in 3D and learn what changes under the new rules: size, active aero, power, tyres and safety." />
+    <meta name="theme-color" content="#8CCAF3" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet" />
+    <link href="./learn.css" rel="stylesheet" />
+  </head>
+  <body>
+    <header class="bar">
+      <a class="pill" href="/">← Sky Circuit</a>
+      <h1>Learn · The 2026 car</h1>
+      <nav class="links" aria-label="Other pages">
+        <a class="pill" href="/creator/">🧑 My character</a>
+        <a class="pill" href="/card/">🃏 Cards</a>
+      </nav>
+    </header>
+    <main class="layout">
+      <section class="stage" aria-label="3D car. Drag to turn, scroll or pinch to zoom.">
+        <canvas id="view"></canvas>
+        <div class="hotspots" id="hotspots"></div>
+        <div class="loading" id="loading" role="status">
+          <div>Loading the car…</div>
+          <div class="bar-track"><i id="progress"></i></div>
+        </div>
+        <div class="tools">
+          <div class="paints" id="paints" role="radiogroup" aria-label="Paint"></div>
+          <button id="spin" aria-pressed="true">⟳ Spin</button>
+          <button id="reset">⌂ Whole car</button>
+        </div>
+      </section>
+      <aside class="panel">
+        <p class="intro">Tap a number on the car, or pick a topic. The camera flies to that part and the notes explain what the 2026 rules change.</p>
+        <ol class="topics" id="topics"></ol>
+        <article class="topic" id="topic" aria-live="polite"></article>
+        <section class="quiz" aria-labelledby="quiz-title">
+          <h2 id="quiz-title">Quick check</h2>
+          <div id="quiz"></div>
+        </section>
+      </aside>
+    </main>
+    <script type="module" src="./learn.js"></script>
+  </body>
+</html>

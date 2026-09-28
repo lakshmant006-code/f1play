@@ -137,6 +137,17 @@ this browser. It then shows up, head to toe on the podium, as the first card on
 `/card/` ("My card", with a rainbow holo rim and a gold tag) and stands in the paddock next to
 the first team's garage. Click it there to play a pose or edit it.
 
+## Learn
+
+`/learn/` shows a 2026-style car in 3D (the uploaded FBX, converted to a
+meshopt-compressed GLB in real meters: 29.7 MB FBX → 2.3 MB GLB, simplified
+from 1.47M triangles). Eight numbered hotspots cover what the 2026 rules
+change: size and weight, active front and rear wings, the half-electric power
+unit, the overtaking boost, the simpler floor, narrower tyres, and the halo
+and crash structures. Picking one flies the camera there and shows notes with
+key figures. You can repaint the bodywork, spin the car and take a four
+question quick check.
+
 ## Not yet done
 
 - glTF export and LODs (build step 6).
