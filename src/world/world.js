@@ -55,56 +55,185 @@ function grassTexture() {
   return grassTex;
 }
 
+const clamp01 = (x) => Math.min(1, Math.max(0, x));
+
+// ---- Procedural noise for the rock -------------------------------------------
+
+function hash3(x, y, z) {
+  let h = (x * 374761393 + y * 668265263 + z * 2147483647) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
+}
+function vnoise(x, y, z) {
+  const xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z);
+  const xf = x - xi, yf = y - yi, zf = z - zi;
+  const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf), w = zf * zf * (3 - 2 * zf);
+  const l = (a, b, t) => a + (b - a) * t;
+  const c = (dx, dy, dz) => hash3(xi + dx, yi + dy, zi + dz);
+  return l(
+    l(l(c(0, 0, 0), c(1, 0, 0), u), l(c(0, 1, 0), c(1, 1, 0), u), v),
+    l(l(c(0, 0, 1), c(1, 0, 1), u), l(c(0, 1, 1), c(1, 1, 1), u), v),
+    w
+  ) * 2 - 1;
+}
+// Fractal noise in -1..1.
+export function fbm(x, y, z, oct = 4) {
+  let a = 0.5, f = 1, s = 0, n = 0;
+  for (let i = 0; i < oct; i++) {
+    s += a * vnoise(x * f, y * f, z * f);
+    n += a;
+    a *= 0.5;
+    f *= 2.03;
+  }
+  return s / n;
+}
+
+// Rock surface detail: cracks and grain as a tiling bump map.
+let rockBump = null;
+function rockBumpTexture() {
+  if (rockBump) return rockBump;
+  const S = 256;
+  const c = document.createElement('canvas');
+  c.width = c.height = S;
+  const ctx = c.getContext('2d');
+  const img = ctx.createImageData(S, S);
+  for (let y = 0; y < S; y++) {
+    for (let x = 0; x < S; x++) {
+      // Tileable by sampling noise on a torus.
+      const a = (x / S) * Math.PI * 2;
+      const b = (y / S) * Math.PI * 2;
+      const nx = Math.cos(a) * 2, ny = Math.sin(a) * 2, nz = Math.cos(b) * 2 + Math.sin(b) * 1.3;
+      let v = fbm(nx, ny + Math.sin(b) * 2, nz, 5) * 0.5 + 0.5;
+      // Horizontal strata lines and a few crack ridges.
+      v -= Math.pow(Math.abs(Math.sin(b * 6 + fbm(nx, ny, nz) * 3)), 18) * 0.35;
+      v -= Math.pow(1 - Math.abs(fbm(nx * 2, ny * 2, nz * 2, 3)), 12) * 0.4;
+      const g = Math.max(0, Math.min(255, v * 255));
+      const i = (y * S + x) * 4;
+      img.data[i] = img.data[i + 1] = img.data[i + 2] = g;
+      img.data[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  rockBump = new THREE.CanvasTexture(c);
+  rockBump.wrapS = rockBump.wrapT = THREE.RepeatWrapping;
+  rockBump.anisotropy = 8;
+  return rockBump;
+}
+
 let islandMats = null;
 export function islandMaterials() {
   if (islandMats) return islandMats;
   islandMats = {
     grass: new THREE.MeshStandardMaterial({ map: grassTexture(), roughness: 0.97 }),
     soil: new THREE.MeshStandardMaterial({ color: SCENERY.soil, roughness: 1 }),
-    rock: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, flatShading: true }),
+    rock: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.93, bumpMap: rockBumpTexture(), bumpScale: 2.2 }),
   };
   return islandMats;
 }
 
-// Grass top over a band of soil, then a craggy rock underside that hangs in
-// uneven lobes to a point, with dark strata toward the bottom.
-export function buildIsland(outline, { depth = 30, seed = 1, grassH = 1.2 } = {}) {
+// Resample a closed outline to even spacing, then relax it so rims are smooth.
+function smoothOutline(outline, spacing = 1.6, passes = 6) {
+  const pts = outline.map((p) => p.clone());
+  let per = 0;
+  for (let i = 0; i < pts.length; i++) per += pts[i].distanceTo(pts[(i + 1) % pts.length]);
+  const n = Math.max(24, Math.min(360, Math.round(per / spacing)));
+  const out = [];
+  let seg = 0;
+  let acc = 0;
+  for (let k = 0; k < n; k++) {
+    const target = (k / n) * per;
+    while (seg < pts.length) {
+      const a = pts[seg];
+      const b = pts[(seg + 1) % pts.length];
+      const len = a.distanceTo(b);
+      if (acc + len >= target) {
+        out.push(a.clone().lerp(b, len ? (target - acc) / len : 0));
+        break;
+      }
+      acc += len;
+      seg++;
+    }
+  }
+  let cur = out;
+  for (let p = 0; p < passes; p++) {
+    cur = cur.map((q, i) => {
+      const a = cur[(i - 1 + cur.length) % cur.length];
+      const b = cur[(i + 1) % cur.length];
+      return new THREE.Vector2((a.x + q.x * 2 + b.x) / 4, (a.y + q.y * 2 + b.y) / 4);
+    });
+  }
+  return cur;
+}
+
+// Grass top over a band of soil, then a dense craggy rock underside: noise
+// carved ledges and strata, several hanging lobes and spurs, crevice shading,
+// a bump map for cracks, and a few loose boulders drifting underneath.
+export function buildIsland(rawOutline, { depth = 30, seed = 1, grassH = 1.2 } = {}) {
   const rand = rng(seed);
   const M = islandMaterials();
   const g = new THREE.Group();
+  const outline = smoothOutline(rawOutline);
   const shape = new THREE.Shape(outline.map((p) => new THREE.Vector2(p.x, -p.y)));
-  const top = new THREE.ExtrudeGeometry(shape, { depth: grassH, bevelEnabled: true, bevelThickness: 0.35, bevelSize: 0.6, bevelSegments: 3, curveSegments: 4 });
+  const top = new THREE.ExtrudeGeometry(shape, { depth: grassH, bevelEnabled: true, bevelThickness: 0.35, bevelSize: 0.6, bevelSegments: 4, curveSegments: 4 });
   top.rotateX(-Math.PI / 2);
   top.translate(0, -grassH - 0.36, 0); // bevel adds 0.35 m above the slab; keep the top just under y = 0
-  // Caps get grass, the extruded sides a soil band.
   const grass = new THREE.Mesh(top, [M.grass, M.soil]);
   grass.receiveShadow = true;
   g.add(grass);
 
-  // Rock: noisy rings shrinking toward the centroid, pulled down in lobes.
+  // Rock grid: rings from the rim down, columns around the outline.
   const c = outline.reduce((a, p) => a.add(p), new THREE.Vector2()).multiplyScalar(1 / outline.length);
-  const rings = 9;
   const n = outline.length;
-  const lobes = Array.from({ length: 5 }, () => ({ a: rand() * Math.PI * 2, w: 0.5 + rand() * 0.6, d: 0.25 + rand() * 0.45 }));
+  const R = 30;
+  const sd = seed * 17.3;
+  // Hanging lobes: a few angular bumps that push the underside deeper.
+  const lobes = Array.from({ length: 4 + Math.floor(rand() * 3) }, () => ({ a: rand() * Math.PI * 2, w: 0.35 + rand() * 0.5, d: 0.25 + rand() * 0.55 }));
   const lobe = (ang) => lobes.reduce((m, l) => Math.max(m, l.d * Math.exp(-Math.pow(Math.atan2(Math.sin(ang - l.a), Math.cos(ang - l.a)) / l.w, 2))), 0);
-  const pos = [];
-  const idx = [];
-  const rim = 0.93;
-  for (let k = 0; k <= rings; k++) {
-    const t = k / rings;
+  const top0 = -grassH - 0.3;
+  const pos = new Float32Array((R + 1) * n * 3 + 3);
+  const uv = new Float32Array((R + 1) * n * 2 + 2);
+  const shade = new Float32Array((R + 1) * n + 1);
+  let perim = 0;
+  const along = [0];
+  for (let i = 1; i <= n; i++) along.push((perim += outline[i - 1].distanceTo(outline[i % n])));
+  for (let k = 0; k <= R; k++) {
+    const t = k / R;
     for (let i = 0; i < n; i++) {
       const p = outline[i];
-      const ang = Math.atan2(p.y - c.y, p.x - c.x);
-      // A short near-vertical cliff under the soil band, then the taper.
-      const shrink = k === 0 ? 1 : k === 1 ? rim : rim * (1 - Math.pow((t - 1 / rings) / (1 - 1 / rings), 0.75) * 0.96);
-      const jitter = k <= 1 ? 1 : 0.86 + rand() * 0.24;
-      const drop = k === 0 ? 0 : k === 1 ? depth * 0.08 : depth * (0.08 + t * (0.7 + lobe(ang)));
-      pos.push(c.x + (p.x - c.x) * shrink * jitter, -grassH - 0.3 - drop + (k > 1 ? (rand() - 0.5) * depth * 0.06 : 0), c.y + (p.y - c.y) * shrink * jitter);
+      const dx = p.x - c.x;
+      const dz = p.y - c.y;
+      const ang = Math.atan2(dz, dx);
+      const L = lobe(ang);
+      // Profile: short near-vertical cliff, a slight bulge, then a long taper.
+      const cliff = Math.min(1, t / 0.08);
+      const taper = t < 0.08 ? 1 : Math.max(0.02, Math.pow(1 - (t - 0.08) / 0.92, 0.9 + (1 - L) * 0.5));
+      let s = (t < 0.08 ? 1 - cliff * 0.05 : 0.95 * taper) * (1 + 0.05 * Math.sin(t * Math.PI));
+      const colDepth = depth * (0.62 + L * 0.75 + fbm(Math.cos(ang) * 1.3 + sd, Math.sin(ang) * 1.3, 0.5) * 0.18);
+      let y = top0 - (t < 0.08 ? cliff * depth * 0.07 : depth * 0.07 + (colDepth - depth * 0.07) * Math.pow((t - 0.08) / 0.92, 1.05));
+      // Crags: fractal noise pushes the surface in and out; strata make ledges.
+      const wx = c.x + dx * s;
+      const wz = c.y + dz * s;
+      const nz = fbm(wx * 0.07 + sd, y * 0.09, wz * 0.07, 5);
+      const strata = Math.pow(Math.abs(Math.sin(y * 0.55 + fbm(wx * 0.03, 0, wz * 0.03) * 2)), 6) * 0.06;
+      const crag = k === 0 ? 0 : nz * 0.16 * Math.min(1, t * 6) - strata * Math.min(1, t * 6);
+      s *= 1 + crag;
+      if (k > 0) y += fbm(wx * 0.05, sd, wz * 0.05, 3) * depth * 0.05 * t;
+      const j = k * n + i;
+      pos[j * 3] = c.x + dx * s;
+      pos[j * 3 + 1] = y;
+      pos[j * 3 + 2] = c.y + dz * s;
+      uv[j * 2] = along[i] / 9;
+      uv[j * 2 + 1] = -y / 9;
+      shade[j] = crag;
     }
   }
-  pos.push(c.x, -grassH - depth * 1.2, c.y);
-  const tip = pos.length / 3 - 1;
-  for (let k = 0; k < rings; k++) {
+  // Tip.
+  const tipIdx = (R + 1) * n;
+  pos[tipIdx * 3] = c.x;
+  pos[tipIdx * 3 + 1] = top0 - depth * 1.15;
+  pos[tipIdx * 3 + 2] = c.y;
+  const idx = [];
+  for (let k = 0; k < R; k++) {
     for (let i = 0; i < n; i++) {
       const a = k * n + i;
       const b = k * n + ((i + 1) % n);
@@ -113,28 +242,83 @@ export function buildIsland(outline, { depth = 30, seed = 1, grassH = 1.2 } = {}
       idx.push(a, b, cc, b, d, cc);
     }
   }
-  for (let i = 0; i < n; i++) idx.push(rings * n + i, rings * n + ((i + 1) % n), tip);
-  let rock = new THREE.BufferGeometry();
-  rock.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  for (let i = 0; i < n; i++) idx.push(R * n + i, R * n + ((i + 1) % n), tipIdx);
+  const rock = new THREE.BufferGeometry();
+  rock.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  rock.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
   rock.setIndex(idx);
-  rock = rock.toNonIndexed();
   rock.computeVertexNormals();
-  const col = [];
-  const top1 = new THREE.Color(SCENERY.soil);
+  // Where rings converge toward the tip, triangles collapse; give those
+  // vertices a straight-down normal instead of NaN.
+  const nrm = rock.attributes.normal;
+  for (let j = 0; j < nrm.count; j++) {
+    const x = nrm.getX(j), y = nrm.getY(j), z = nrm.getZ(j);
+    if (!(x * x + y * y + z * z > 1e-6)) nrm.setXYZ(j, 0, -1, 0);
+  }
+  // Colors: soil under the lip, warm rock fading to dark earth, crevices darker.
+  const col = new Float32Array(pos.length);
+  const soil = new THREE.Color(SCENERY.soil);
   const mid = new THREE.Color(SCENERY.cliff);
   const dark = new THREE.Color(SCENERY.cliffDark);
-  const p = rock.attributes.position;
-  for (let i = 0; i < p.count; i++) {
-    const y = -p.getY(i);
+  const warm = new THREE.Color('#8A6546');
+  const tmp = new THREE.Color();
+  for (let j = 0; j <= tipIdx; j++) {
+    const y = -pos[j * 3 + 1];
     const t = Math.min(1, y / (depth * 1.1));
-    const band = Math.sin(y * 1.3) * 0.05 + Math.sin(y * 0.37 + 1) * 0.05;
-    const cc = y < grassH + 2 ? top1.clone() : mid.clone().lerp(dark, Math.min(1, t * 0.95 + band));
-    col.push(cc.r, cc.g, cc.b);
+    const band = fbm(pos[j * 3] * 0.02, y * 0.35, pos[j * 3 + 2] * 0.02, 2) * 0.18;
+    if (y < grassH + 1.6) tmp.copy(soil);
+    else tmp.copy(warm).lerp(mid, clamp01(t * 1.6 + band)).lerp(dark, clamp01(t * 1.15 - 0.2 + band));
+    const ao = 1 + Math.min(0, shade[j] || 0) * 2.2 + Math.max(0, shade[j] || 0) * 0.6;
+    tmp.multiplyScalar(Math.max(0.45, Math.min(1.15, ao)));
+    col[j * 3] = tmp.r;
+    col[j * 3 + 1] = tmp.g;
+    col[j * 3 + 2] = tmp.b;
   }
-  rock.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  rock.setAttribute('color', new THREE.BufferAttribute(col, 3));
   const rockMesh = new THREE.Mesh(rock, M.rock);
-  rockMesh.castShadow = true;
+  rockMesh.receiveShadow = true;
   g.add(rockMesh);
+
+  // Spurs: smaller hanging rock spikes around the underside, and loose boulders.
+  const spurs = [];
+  const nSpurs = 5 + Math.floor(perim / 60);
+  for (let q = 0; q < nSpurs; q++) {
+    const i = Math.floor(rand() * n);
+    const k = Math.floor(R * (0.25 + rand() * 0.45));
+    const j = k * n + i;
+    const px = pos[j * 3], py = pos[j * 3 + 1], pz = pos[j * 3 + 2];
+    const len = depth * (0.12 + rand() * 0.22);
+    const rad = len * (0.18 + rand() * 0.1);
+    const cone = new THREE.ConeGeometry(rad, len, 9, 6);
+    const cp = cone.attributes.position;
+    for (let v = 0; v < cp.count; v++) {
+      const f = 1 + fbm(cp.getX(v) * 0.6 + q, cp.getY(v) * 0.4, cp.getZ(v) * 0.6, 3) * 0.3;
+      cp.setX(v, cp.getX(v) * f);
+      cp.setZ(v, cp.getZ(v) * f);
+    }
+    cone.rotateX(Math.PI);
+    cone.translate(px + (c.x - px) * 0.08, py - len / 2 + rad * 0.6, pz + (c.y - pz) * 0.08);
+    spurs.push(tint(cone, rand() < 0.5 ? SCENERY.cliff : '#5A4131'));
+  }
+  const boulders = [];
+  const nB = 3 + Math.floor(rand() * 4);
+  for (let q = 0; q < nB; q++) {
+    const a = rand() * Math.PI * 2;
+    const r = Math.sqrt(perim / Math.PI / 2) * (0.35 + rand() * 0.6);
+    const size = 1.2 + rand() * 3.2;
+    const b = new THREE.IcosahedronGeometry(size, 2);
+    const bp = b.attributes.position;
+    for (let v = 0; v < bp.count; v++) {
+      const f = 1 + fbm(bp.getX(v) * 0.5 + q * 3, bp.getY(v) * 0.5, bp.getZ(v) * 0.5, 3) * 0.35;
+      bp.setXYZ(v, bp.getX(v) * f, bp.getY(v) * f * 0.8, bp.getZ(v) * f);
+    }
+    b.computeVertexNormals(); // boulders are closed and smooth, so this is safe
+    b.translate(c.x + Math.cos(a) * r, top0 - depth * (0.35 + rand() * 0.7), c.y + Math.sin(a) * r);
+    boulders.push(tint(b, rand() < 0.5 ? SCENERY.cliff : '#6A4C37'));
+  }
+  const extra = new THREE.Mesh(merge([...spurs, ...boulders], { color: true, uv: true }), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, bumpMap: rockBumpTexture(), bumpScale: 1.5 }));
+  g.add(extra);
+  g.userData.outline = outline;
   return g;
 }
 
