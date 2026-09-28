@@ -321,51 +321,90 @@ export function buildCharacter(recipe = DEFAULT_RECIPE) {
   const skull = mesh(new THREE.SphereGeometry(0.16, 28, 20), skin, 0.15);
   skull.scale.set(1, 1.12, 1);
   head.add(skull);
+  head.add(mesh(new THREE.CylinderGeometry(0.1, 0.11, 0.14, 24), skin, -0.02)); // neck, fills the helmet's mouth opening
   const fz = 0.162; // front of the face
   if (!r.visorDown) {
-    eyes(head, r, 0.165, fz);
-    brows(head, r, 0.212, fz - 0.006);
+    eyes(head, r, 0.18, fz);
+    brows(head, r, 0.222, fz - 0.008);
   }
   mouth(head, r, 0.08, fz - 0.022);
 
-  // Full-face helmet (after the helmet reference): an egg-shaped shell with a
-  // face window from the brow to below the mouth, a chin guard, a dark lining
-  // and a wide visor band that wraps round the front.
+  // Full-face helmet (after the helmet views): a smooth egg-shaped shell with
+  // an eye port behind a wrap-round visor (with a raised rim and side pivots),
+  // a bar, a mouth opening and chin guard, a black neck trim, a rear spoiler
+  // and centre ridge, and side vents. Everything is built on a unit egg so the
+  // visor can swing up over the crown.
   const helmet = new THREE.Group();
-  const shell = solid(r.primary, { roughness: 0.3, metalness: 0.05 });
+  const egg = new THREE.Group();
+  egg.position.y = 0.16;
+  egg.scale.set(1, 1.15, 1.08);
+  helmet.add(egg);
+  const shell = solid(r.primary, { roughness: 0.28, metalness: 0.05 });
+  const trimMat = solid('#141416', { roughness: 0.7 });
   const R = 0.215;
-  const WIN = Math.PI * 0.3; // half-width of the face window
-  const T0 = Math.PI * 0.4; // window top (just above the brows)
-  const T1 = Math.PI * 0.68; // window bottom (below the mouth)
-  const part = (phi0, phiLen, th0, thLen, rad = R) => new THREE.SphereGeometry(rad, 40, 28, phi0, phiLen, th0, thLen);
-  const shellParts = [
-    part(0, Math.PI * 2, 0, T0), // crown
-    part(Math.PI / 2 + WIN, Math.PI * 2 - 2 * WIN, T0, T1 - T0), // sides and back around the window
-    part(0, Math.PI * 2, T1, Math.PI * 0.9 - T1), // chin guard, open underneath for the neck
+  const FRONT = Math.PI / 2; // +z in sphere angles
+  const EW = Math.PI * 0.34; // eye port half-width
+  const MW = Math.PI * 0.22; // mouth opening half-width
+  const T0 = Math.PI * 0.36; // eye port top
+  const T1 = Math.PI * 0.52; // eye port bottom
+  const T2 = Math.PI * 0.56; // mouth opening top
+  const T3 = Math.PI * 0.68; // mouth opening bottom
+  const T4 = Math.PI * 0.86; // shell bottom, then the neck trim
+  const D = 0.05; // rim width
+  const O = 0.006; // small overlap so shell bands meet without seams
+  const seg = (ph0, phLen, th0, thLen, rad = R) => new THREE.SphereGeometry(rad, 48, 32, ph0, phLen, th0, thLen);
+  const add = (geo, mat, parent = egg) => {
+    const m = new THREE.Mesh(geo, mat);
+    m.castShadow = true;
+    parent.add(m);
+    return m;
+  };
+  const around = (w) => [FRONT + w, Math.PI * 2 - 2 * w]; // full ring except the front ±w
+  add(seg(0, Math.PI * 2, 0, T0 + O), shell); // crown
+  add(seg(...around(EW), T0, T1 - T0 + O), shell); // around the eye port
+  add(seg(0, Math.PI * 2, T1, T2 - T1 + O), shell); // bar between eye port and mouth
+  add(seg(...around(MW), T2, T3 - T2 + O), shell); // around the mouth
+  add(seg(0, Math.PI * 2, T3, T4 - T3 + O), shell); // chin guard
+  add(seg(0, Math.PI * 2, T4, Math.PI * 0.07, R + 0.003), trimMat); // neck trim
+  add(seg(0, Math.PI * 2, 0, Math.PI, R - 0.006), solid('#141416', { roughness: 0.9, side: THREE.BackSide })); // lining
+  // Raised rim round the eye port.
+  const rim = [
+    seg(FRONT - EW - D, 2 * (EW + D), T0 - D, D, R + 0.007),
+    seg(FRONT - EW - D, 2 * (EW + D), T1, D * 0.8, R + 0.007),
+    seg(FRONT + EW, D, T0 - D, T1 - T0 + D * 1.8, R + 0.007),
+    seg(FRONT - EW - D, D, T0 - D, T1 - T0 + D * 1.8, R + 0.007),
   ];
-  for (const g of shellParts) {
-    const m = mesh(g, shell, 0.16);
-    m.scale.set(1, 1.15, 1.08);
-    helmet.add(m);
+  rim.forEach((g) => add(g, shell));
+  // Point on the egg (unit-egg space) with its outward normal, for trim parts.
+  const at = (m, th, ph, off = 0) => {
+    const dir = new THREE.Vector3(-Math.cos(ph) * Math.sin(th), Math.cos(th), Math.sin(ph) * Math.sin(th));
+    m.position.copy(dir).multiplyScalar(R + off);
+    m.lookAt(dir.clone().multiplyScalar(2)); // face outwards, kept level
+    egg.add(m);
+    return m;
+  };
+  // Visor: one smooth lens over the eye port. It hinges on the side pivots
+  // and swings up over the crown when raised.
+  const visorPivot = new THREE.Group();
+  egg.add(visorPivot);
+  const lens = solid(r.visor, { roughness: 0.06, metalness: r.visor === '#16171a' ? 0.55 : 0.8 });
+  add(seg(FRONT - EW - D * 0.15, 2 * (EW + D * 0.15), T0 - D * 0.15, T1 - T0 + D * 0.3, R + 0.004), lens, visorPivot);
+  visorPivot.rotation.x = r.visorDown ? 0 : -0.62;
+  for (const s of [1, -1]) {
+    const tab = at(new THREE.Mesh(box(0.045, 0.06, 0.02, 0.008), trimMat), (T0 + T1) / 2, FRONT + s * (EW + D * 1.1), 0.008);
+    tab.castShadow = true;
   }
-  const lining = mesh(new THREE.SphereGeometry(R - 0.006, 32, 20), solid('#141416', { roughness: 0.9, side: THREE.BackSide }), 0.16);
-  lining.scale.set(1, 1.15, 1.08);
-  helmet.add(lining);
-  // Visor: pulled down over the eyes, or raised onto the forehead.
-  const vT = r.visorDown ? T0 - 0.02 : Math.PI * 0.27;
-  const visor = mesh(
-    part(Math.PI / 2 - Math.PI * 0.4, Math.PI * 0.8, vT, Math.PI * 0.14, R + 0.008),
-    solid(r.visor, { roughness: 0.08, metalness: r.visor === '#16171a' ? 0.5 : 0.75, side: THREE.DoubleSide }),
-    0.16
-  );
-  visor.scale.set(1, 1.15, 1.08);
-  helmet.add(visor);
+  // Rear spoiler and centre ridge.
+  const BACK = -Math.PI / 2;
+  at(new THREE.Mesh(box(0.1, 0.035, 0.05, 0.012), shell), Math.PI * 0.2, BACK, 0.018).rotateX(-0.5);
+  add(seg(BACK - 0.05, 0.1, Math.PI * 0.25, Math.PI * 0.3, R + 0.009), shell); // raised centre ridge
+  // Side vents at the back of each side.
+  for (const ph of [Math.PI * 1.22, Math.PI * 1.78]) {
+    for (const k of [0, 1]) at(new THREE.Mesh(box(0.06, 0.011, 0.01, 0.004), trimMat), Math.PI * (0.4 + k * 0.035), ph, 0.002);
+  }
   // Sky Circuit stripe mark on the crown.
   for (let k = 0; k < 3; k++) {
-    const bar = mesh(box(0.075, 0.012, 0.01, 0.004), solid('#ffffff'), 0.38 - k * 0.02, 0.012 + k * 0.006, 0.105 - k * 0.012);
-    bar.rotation.x = -0.95;
-    bar.rotation.z = 0.15;
-    helmet.add(bar);
+    at(new THREE.Mesh(box(0.075, 0.012, 0.006, 0.003), solid('#ffffff')), Math.PI * (0.2 + k * 0.035), FRONT + 0.06 + k * 0.03, 0.001);
   }
   head.add(helmet);
   J.helmet = helmet;

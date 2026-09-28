@@ -115,8 +115,9 @@ the character reference sheet:
 
 The suits carry an original Sky Circuit stripe mark, not a real series logo.
 The name must be 3 to 16 characters. The number must be 2 to 99 and can't be a
-team driver's number. Saving keeps the character in this browser. It then shows
-up as the first card on `/card/` ("My card") and stands in the paddock next to
+team driver's number. The character stands on a green winner's podium. Saving keeps the character in
+this browser. It then shows up, head to toe on the podium, as the first card on
+`/card/` ("My card", with a rainbow holo rim and a gold tag) and stands in the paddock next to
 the first team's garage. Click it there to play a pose or edit it.
 
 ## Not yet done

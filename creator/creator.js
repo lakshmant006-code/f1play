@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import {
   buildCharacter, animateCharacter, setPose, saveRecipe, loadRecipe,
   PRESETS, SUITS, GLOVES, BROWS, MOUTHS, PROPS, VISORS, SKINS, SWATCHES, EMOTES, DEFAULT_RECIPE,
@@ -26,9 +27,9 @@ const scene = new THREE.Scene();
 scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
 scene.environmentIntensity = 0.5;
 const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 50);
-camera.position.set(1.4, 1.35, 3.6);
+camera.position.set(1.5, 1.3, 4.4);
 const controls = new OrbitControls(camera, canvas);
-controls.target.set(0, 0.92, 0);
+controls.target.set(0, 0.72, 0);
 controls.enableDamping = true;
 controls.enablePan = false;
 controls.minDistance = 2;
@@ -44,15 +45,35 @@ const key = new THREE.DirectionalLight('#fff4e0', 2.4);
 key.position.set(2, 4, 3);
 key.castShadow = true;
 key.shadow.mapSize.set(1024, 1024);
-key.shadow.camera.left = key.shadow.camera.bottom = -1.5;
-key.shadow.camera.right = key.shadow.camera.top = 1.5;
+key.shadow.camera.left = key.shadow.camera.bottom = -1.8;
+key.shadow.camera.right = key.shadow.camera.top = 1.8;
 scene.add(key);
-const plinth = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.8, 0.12, 12), new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.5, flatShading: true }));
-plinth.position.y = -0.07;
-plinth.receiveShadow = true;
-const ring = new THREE.Mesh(new THREE.TorusGeometry(0.78, 0.02, 4, 48), new THREE.MeshStandardMaterial({ color: '#1fb5b0' }));
-ring.rotation.x = Math.PI / 2;
-scene.add(plinth, ring);
+// Green winner's podium the character stands on (also in the card snapshot).
+const podium = new THREE.Group();
+const green = new THREE.MeshStandardMaterial({ color: '#16863A', roughness: 0.45 });
+const greenTop = new THREE.MeshStandardMaterial({ color: '#22A34A', roughness: 0.4 });
+const block = new THREE.Mesh(new RoundedBoxGeometry(1.0, 0.4, 0.8, 4, 0.05), green);
+block.position.y = -0.2;
+const top = new THREE.Mesh(new RoundedBoxGeometry(1.04, 0.05, 0.84, 4, 0.02), greenTop);
+top.position.y = -0.02;
+block.receiveShadow = top.receiveShadow = true;
+block.castShadow = true;
+podium.add(block, top);
+// A big "1" on the front, drawn on a canvas.
+const numCanvas = document.createElement('canvas');
+numCanvas.width = numCanvas.height = 256;
+const nctx = numCanvas.getContext('2d');
+nctx.fillStyle = '#ffffff';
+nctx.font = '900 210px Nunito, system-ui, sans-serif';
+nctx.textAlign = 'center';
+nctx.textBaseline = 'middle';
+nctx.fillText('1', 128, 140);
+const numTex = new THREE.CanvasTexture(numCanvas);
+numTex.colorSpace = THREE.SRGBColorSpace;
+const numPlate = new THREE.Mesh(new THREE.PlaneGeometry(0.28, 0.28), new THREE.MeshStandardMaterial({ map: numTex, transparent: true, roughness: 0.5 }));
+numPlate.position.set(0, -0.21, 0.402);
+podium.add(numPlate);
+scene.add(podium);
 
 let recipe = { ...DEFAULT_RECIPE, ...(loadRecipe()?.recipe || {}) };
 let model = null;
@@ -69,7 +90,6 @@ function rebuild() {
   }
   model = buildCharacter(recipe);
   scene.add(model);
-  ring.material.color.set(recipe.primary);
 }
 
 function resize() {
@@ -209,40 +229,46 @@ $('save').addEventListener('click', () => {
   if (err) return;
   recipe.name = $('name').value.trim();
   recipe.number = Number($('number').value);
-  // Snapshot from a fixed front three-quarter camera for the card.
-  const saved = { pos: camera.position.clone(), target: controls.target.clone(), auto: controls.autoRotate };
-  controls.autoRotate = false;
-  camera.position.set(0.9, 1.25, 2.9);
-  controls.target.set(0, 0.95, 0);
-  controls.update();
-  renderer.render(scene, camera);
-  const snapshot = cropSnapshot(renderer.domElement);
-  camera.position.copy(saved.pos);
-  controls.target.copy(saved.target);
-  controls.autoRotate = saved.auto;
+  const snapshot = cardSnapshot();
   const ok = saveRecipe(recipe, snapshot);
   $('saved').innerHTML = ok
     ? `Saved <b>#${recipe.number} ${escapeHtml(recipe.name)}</b>. <a href="/card/">See your card</a> or <a href="/">find yourself in the paddock</a>.`
     : 'Could not save in this browser (storage is blocked).';
 });
 
-// A 610x512 crop around the character, like the card art.
-function cropSnapshot(src) {
+// Card art: the whole character on the podium, rendered at the card's
+// 610x512 size from a fixed front three-quarter camera, over a sky gradient.
+function cardSnapshot() {
+  const W = 610;
+  const H = 512;
+  const size = renderer.getSize(new THREE.Vector2());
+  const ratio = renderer.getPixelRatio();
+  const cam = new THREE.PerspectiveCamera(30, W / H, 0.1, 50);
+  cam.position.set(1.25, 1.0, 4.85); // margin for the card's parallax crop
+  cam.lookAt(0, 0.74, 0);
+  renderer.setPixelRatio(2);
+  renderer.setSize(W, H, false);
+  renderer.render(scene, cam);
   const out = document.createElement('canvas');
-  out.width = 610;
-  out.height = 512;
+  out.width = W * 2;
+  out.height = H * 2;
   const ctx = out.getContext('2d');
-  const g = ctx.createLinearGradient(0, 0, 0, 512);
-  g.addColorStop(0, '#d8eefc');
-  g.addColorStop(1, '#a9d8f5');
+  const g = ctx.createLinearGradient(0, 0, 0, out.height);
+  g.addColorStop(0, '#8fd0f7');
+  g.addColorStop(0.7, '#d8eefc');
+  g.addColorStop(1, '#eef8ff');
   ctx.fillStyle = g;
-  ctx.fillRect(0, 0, 610, 512);
-  const w = src.width;
-  const h = src.height;
-  const cw = Math.min(w, h * (610 / 512));
-  const ch = cw * (512 / 610);
-  ctx.drawImage(src, (w - cw) / 2, (h - ch) / 2, cw, ch, 0, 0, 610, 512);
-  return out.toDataURL('image/jpeg', 0.85);
+  ctx.fillRect(0, 0, out.width, out.height);
+  // Soft sun glow behind the head.
+  const glow = ctx.createRadialGradient(out.width * 0.52, out.height * 0.3, 10, out.width * 0.52, out.height * 0.3, out.width * 0.45);
+  glow.addColorStop(0, 'rgba(255,255,255,0.85)');
+  glow.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, out.width, out.height);
+  ctx.drawImage(renderer.domElement, 0, 0, out.width, out.height);
+  renderer.setPixelRatio(ratio);
+  renderer.setSize(size.x, size.y, false);
+  return out.toDataURL('image/jpeg', 0.88);
 }
 
 function escapeHtml(s) {
@@ -252,3 +278,4 @@ function escapeHtml(s) {
 rebuild();
 renderPanel();
 resize();
+window.skyCreator = { camera, controls }; // handy for debugging in the console

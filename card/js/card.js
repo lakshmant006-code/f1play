@@ -72,6 +72,7 @@ function glowFor(team) {
 function show(i) {
   index = (i + CARDS.length) % CARDS.length;
   const { team, driver, no, art } = CARDS[index];
+  stage.classList.toggle('mine', !no); // the player's own card gets a holo rim
   stage.style.setProperty('--team', team.primary);
   stage.style.setProperty('--team-2', team.secondary);
   stage.style.setProperty('--glow', glowFor(team));
