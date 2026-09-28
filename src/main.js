@@ -4,10 +4,11 @@ import { createPost } from './fx/post.js';
 import { CameraRig } from './camera.js';
 import { UI } from './ui/ui.js';
 import { Game } from './game/game.js';
+import { SCENERY } from './data.js';
 
 const canvas = document.getElementById('scene');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-renderer.setClearColor('#E9E2D5');
+renderer.setClearColor(SCENERY.fog);
 const mobile = matchMedia('(pointer: coarse)').matches;
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, mobile ? 1.5 : 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -17,7 +18,7 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog('#E9E2D5', 300, 780);
+scene.fog = new THREE.Fog(SCENERY.fog, 300, 780);
 const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 scene.environmentIntensity = 0.55;

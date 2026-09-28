@@ -4,6 +4,7 @@
 // art slides inside its panel and the page background drifts the other way.
 
 import { TEAMS, DRIVERS } from '../../src/data.js';
+import { loadRecipe, PRESETS } from '../../src/character/recipe.js';
 import car4 from '../images/car-4.png';
 import car8 from '../images/car-8.png';
 import car11 from '../images/car-11.png';
@@ -15,8 +16,30 @@ const ART = { 4: car4, 8: car8, 11: car11, 6: car6, 3: car3 };
 // One card per team: the driver of the car in that team's garage.
 const CARDS = TEAMS.map((team, i) => {
   const d = DRIVERS.find((x) => x.number === team.numbers[0]);
-  return { team, driver: d, no: i + 1 };
+  return { team, driver: d, no: i + 1, art: ART[d.number] };
 });
+
+// Stats for the player's own card come from the character they picked.
+const ROLE_STATS = {
+  ace: { Pace: 90, Nerve: 88, Teamwork: 76 },
+  engineer: { Pace: 72, Nerve: 80, Teamwork: 95 },
+  rookie: { Pace: 84, Nerve: 90, Teamwork: 82 },
+  gunner: { Pace: 94, Nerve: 85, Teamwork: 88 },
+  veteran: { Pace: 83, Nerve: 80, Teamwork: 92 },
+};
+
+// The character saved in the creator goes first, as "My card".
+const mine = loadRecipe();
+if (mine) {
+  const r = mine.recipe;
+  CARDS.unshift({
+    team: { name: `${PRESETS[r.preset]?.role || 'Driver'} · My card`, primary: r.primary, secondary: r.secondary, accent: r.primary },
+    driver: { number: r.number, name: r.name, from: 'Sky Circuit' },
+    no: 0,
+    art: mine.snapshot,
+    stats: ROLE_STATS[r.preset] || ROLE_STATS.ace,
+  });
+}
 
 // Stats are fixed per driver (never random), from their personality line.
 const STATS = {
@@ -48,17 +71,17 @@ function glowFor(team) {
 
 function show(i) {
   index = (i + CARDS.length) % CARDS.length;
-  const { team, driver, no } = CARDS[index];
+  const { team, driver, no, art } = CARDS[index];
   stage.style.setProperty('--team', team.primary);
   stage.style.setProperty('--team-2', team.secondary);
   stage.style.setProperty('--glow', glowFor(team));
-  $('art').style.backgroundImage = `url(${ART[driver.number]})`;
+  $('art').style.backgroundImage = art ? `url(${art})` : 'none';
   $('badge').textContent = `#${driver.number}`;
-  $('cardNo').textContent = `No. ${String(no).padStart(4, '0')}`;
+  $('cardNo').textContent = no ? `No. ${String(no).padStart(4, '0')}` : 'My card';
   $('name').textContent = driver.name;
   $('from').textContent = driver.from;
   $('team').textContent = team.name;
-  const stats = STATS[driver.number];
+  const stats = CARDS[index].stats || STATS[driver.number];
   $('stats').replaceChildren(
     ...Object.entries(stats).map(([k, v]) => {
       const row = document.createElement('div');

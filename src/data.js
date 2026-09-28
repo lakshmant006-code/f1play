@@ -16,10 +16,10 @@ export const PALETTE = {
 // Scenery palette: muted, painterly tones (warm haze, olive greens, dark
 // earth) so the bright team liveries pop against it.
 export const SCENERY = {
-  skyTop: '#DCDDD8',
-  skyMid: '#EDE7DB',
-  skyLow: '#E4DCCD',
-  fog: '#E9E2D5',
+  skyTop: '#3E9BE6',
+  skyMid: '#74BDF0',
+  skyLow: '#A6D6F7',
+  fog: '#8CCAF3',
   grassDark: '#4F7534',
   grass: '#6A9243',
   grassLight: '#8AAA57',

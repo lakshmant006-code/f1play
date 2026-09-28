@@ -326,3 +326,7 @@ body {
     transition: none;
   }
 }
+.back-link.creator-link {
+  left: auto;
+  right: 18px;
+}

@@ -20,6 +20,9 @@ import { h } from '../ui/ui.js';
 import { Explorer, PLACES } from '../explore.js';
 import { SoundScape } from '../audio.js';
 import { PlayerDrive } from '../drive.js';
+import { buildCharacter, animateCharacter, setPose, loadRecipe, EMOTES, PRESETS } from '../character/blocky.js';
+
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const deg = THREE.MathUtils.degToRad;
@@ -66,6 +69,7 @@ export class Game {
       onHover: (e, source) => this.onHover(e, source),
       onEscape: () => (this.explorer.active || this.player.active ? null : this.ui.modal.hidden ? this.goHome() : this.ui.closeModal()),
     });
+    this.addMyCharacter();
     this.registerInteractions();
     this.explorer = new Explorer(this);
     this.audio = new SoundScape(this);
@@ -159,6 +163,52 @@ export class Game {
       }
       this.actors.push(...team.crewList);
     }
+  }
+
+  // The player's own character from the creator, standing by the first team's garage.
+  addMyCharacter() {
+    const saved = loadRecipe();
+    if (!saved?.recipe) return;
+    const team = this.teams.find((t) => t.launch);
+    const r = saved.recipe;
+    const me = buildCharacter(r);
+    me.position.set(team.garageCar.root.position.x + 3.6, 0, GARAGE_FRONT_Z - 2.6);
+    me.rotation.y = -0.25;
+    me.traverse((o) => o.isMesh && (o.castShadow = true));
+    this.scene.add(me);
+    this.me = { root: me, recipe: r };
+    const hit = new THREE.Group();
+    Interactions.proxy(hit, 0.8, 1.8, 0.8);
+    me.add(hit);
+    this.interactions.add({
+      id: 'me',
+      kind: 'driver',
+      hit,
+      outline: [me],
+      accent: r.primary,
+      anchor: me.userData.joints.head,
+      label: () => `<span class="num" style="background:${r.primary}">${r.number}</span>${esc(r.name)} · you`,
+      pulse: true,
+      onClick: () => this.focusMe(),
+    });
+  }
+
+  focusMe() {
+    const { root, recipe: r } = this.me;
+    this.focus = { kind: 'me' };
+    const head = root.userData.joints.head.getWorldPosition(V(0, 0, 0));
+    this.focusView(head.clone().add(V(0, -0.35, 0)), { distance: 3.6, elevation: 16, azimuth: root.rotation.y + 0.35, minEl: 8 });
+    this.ui.showCard({
+      kicker: `#${r.number} · ${PRESETS[r.preset]?.role || 'Driver'} · Sky Circuit`,
+      title: r.name,
+      accent: r.primary,
+      body: '<p>Your character from the creator.</p>',
+      actions: [
+        ...['wave', 'thumbs', 'jump', 'akimbo'].map((id) => ({ label: EMOTES[id], onClick: () => setPose(root, id) })),
+        { label: '✏️ Edit character', primary: true, onClick: () => (location.href = '/creator/') },
+        { label: 'Back', onClick: () => this.goHome() },
+      ],
+    });
   }
 
   // ---- Interactions -------------------------------------------------------------
@@ -981,6 +1031,7 @@ export class Game {
       if (d.inCar && d.car.drive) d.seated.anim.params.lean = THREE.MathUtils.clamp((d.car.drive.smp.curv || 0) * 8, -1, 1);
     }
     for (const a of this.actors) if (a.root.visible) a.update(dt);
+    if (this.me) animateCharacter(this.me.root, dt);
     this.pitChallenge.update(dt);
     this.explorer.update(dt);
     this.audio.update(this.explorer.active || this.player.active);

@@ -11,7 +11,7 @@
 }
 
 * { box-sizing: border-box; }
-html, body { margin: 0; height: 100%; overflow: hidden; background: #E9E2D5; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: #8CCAF3; }
 #scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; outline: none; touch-action: none; }
 #ui { position: fixed; inset: 0; pointer-events: none; }
 #ui > * { pointer-events: auto; }
@@ -116,7 +116,7 @@ button[aria-pressed='true'] { background: #2d7ff9; color: #fff; border-color: #2
 .modal select { font: inherit; font-weight: 700; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line); width: 100%; }
 .modal label { display: block; font-size: 13px; font-weight: 800; margin-top: 8px; }
 
-.loading { position: absolute; inset: 0; display: grid; place-items: center; font-weight: 900; font-size: 20px; background: #E9E2D5; transition: opacity 0.5s; }
+.loading { position: absolute; inset: 0; display: grid; place-items: center; font-weight: 900; font-size: 20px; background: #8CCAF3; transition: opacity 0.5s; }
 #ui > .loading.done { opacity: 0; pointer-events: none; }
 #ui > .topbar { pointer-events: none; }
 

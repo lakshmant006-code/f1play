@@ -98,9 +98,30 @@ The card has a parallax tilt that follows the mouse, or the phone's tilt:
 Use ‹ › or the arrow keys to switch cards. The tilt switches off when the
 system is set to reduce motion.
 
+## Character creator
+
+`/creator/` lets players make their own blocky low-poly character, built from
+the character reference sheet:
+
+- five presets: The Ace (hands on hips), Race Engineer (tablet), The Rookie
+  (waving, visor down), Wheel Gunner (crouched with a wheel gun) and The
+  Veteran (arms crossed, visor down);
+- suit (team stripes, classic, star slash, diamond), team colour, suit base,
+  gloves (dark mitts, star, star in team colour, bare hands), skin tone,
+  eyebrows (determined, straight, arched, none), mouth (smile, big grin,
+  serious, smirk), visor up or down, visor tint, held prop, name and number;
+- poses: hands on hips, check the tablet, wave, ready stance, arms crossed,
+  thumbs up, jump.
+
+The suits carry an original Sky Circuit stripe mark, not a real series logo.
+The name must be 3 to 16 characters. The number must be 2 to 99 and can't be a
+team driver's number. Saving keeps the character in this browser. It then shows
+up as the first card on `/card/` ("My card") and stands in the paddock next to
+the first team's garage. Click it there to play a pose or edit it.
+
 ## Not yet done
 
-- Character creator, glTF export and LODs (build step 6).
+- glTF export and LODs (build step 6).
 - Performance pass: the scene is about 400k triangles, right at the 400k target,
   and still around 420 draw calls against the target of 100. Instancing the crew
   and crowd and adding LODs is the next step.
@@ -122,6 +143,8 @@ src/game/              layout, paths and speed profile, driving, paddock,
 src/fx/                post stack (outline, tilt-shift, grade), particles, rain
 src/camera.js          orbit rig with eased glides, rotate/tilt/turntable
 card/                  Figma card page: index.html, css/main.css, js/card.js, images/
+creator/               character creator page: index.html, creator.css, creator.js
+src/character/         blocky character: recipe.js (options, presets, saving), blocky.js (model, poses)
 src/drive.js           drive mode: physics, cockpit/T-cam/chase cameras, wheel display, laps
 src/explore.js         walk mode: places, viewpoints, walkable surfaces, collisions
 src/audio.js           procedural engine and crowd sound
