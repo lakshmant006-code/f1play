@@ -1,0 +1,328 @@
+/* Figma export (figma-to-html), adapted:
+   - Page (.v6_8) fills the viewport and centres the card instead of fixed
+     1440x1024 coordinates; the card keeps its exact Figma sizes and offsets.
+   - overflow: hidden is dropped on the card containers, because it would
+     flatten the 3D layers the parallax needs; panels clip their own content.
+   - Figma's 0-1 glow colour rgba(0, 0.83, 1, 0.55) is written as 0-255.
+   - The missing images/v6_8.png and images/v6_7.png are replaced with a
+     render of the circuit and a team-coloured pattern. */
+
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+body {
+  font-size: 14px;
+  font-family: Nunito, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color: #0e1b2b;
+  background: #0b0f16;
+  overflow: hidden;
+}
+
+/* Page background (Figma: .v6_8 with images/v6_8.png). */
+.v6_8 {
+  --px: 0;
+  --py: 0;
+  --team: #f26b1d;
+  --glow: 0, 212, 255;
+  width: 100%;
+  height: 100%;
+  min-height: 560px;
+  background: #0b0f16;
+  opacity: 1;
+  position: absolute;
+  top: 0px;
+  left: 0px;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  isolation: isolate;
+}
+/* The circuit render sits on its own layer, a little larger than the page,
+   and drifts against the card for the page-level parallax. */
+.v6_8::before {
+  content: '';
+  position: absolute;
+  inset: -40px;
+  z-index: -1;
+  background:
+    radial-gradient(60% 55% at 50% 45%, rgba(var(--glow), 0.18), transparent 70%),
+    linear-gradient(rgba(8, 12, 20, 0.55), rgba(8, 12, 20, 0.85)),
+    url('../images/background.jpg') center / cover no-repeat;
+  transform: translate(calc(var(--px) * -24px), calc(var(--py) * -18px));
+  transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Faint guide lines through the centre (Figma: .v4_4 horizontal, .v4_7 vertical). */
+.v4_4 {
+  width: 100%;
+  height: 1px;
+  background: rgba(255, 255, 255, 1);
+  opacity: 0.04;
+  position: absolute;
+  top: 50%;
+  left: 0px;
+  overflow: hidden;
+}
+.v4_7 {
+  width: 1px;
+  height: 100%;
+  background: rgba(255, 255, 255, 1);
+  opacity: 0.04;
+  position: absolute;
+  top: 0px;
+  left: 50%;
+  overflow: hidden;
+}
+
+/* 3D stage for the card: the 354x494 Figma card box. */
+.card-scene {
+  width: 354px;
+  height: 494px;
+  perspective: 1100px;
+  scale: var(--fit, 1); /* set from JS so the card fits short screens */
+  position: relative;
+  z-index: 1;
+}
+.card-tilt {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  transform: rotateX(calc(var(--py) * -14deg)) rotateY(calc(var(--px) * 16deg));
+  transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+  will-change: transform;
+}
+.card-tilt.tracking {
+  transition: transform 0.08s linear;
+}
+
+/* Glow plate behind the rim (Figma: .v4_9, offset 2px inside the rim). */
+.v4_9 {
+  width: 350px;
+  height: 490px;
+  background: rgba(0, 0, 0, 1);
+  opacity: 1;
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  border-radius: 18px;
+  box-shadow: 0px 0px 40px rgba(var(--glow), 0.55), 0 30px 60px rgba(0, 0, 0, 0.55);
+  transform: translateZ(-30px);
+}
+
+/* White rim (Figma: .v4_10). */
+.v4_10 {
+  width: 354px;
+  height: 494px;
+  background: rgba(255, 255, 255, 1);
+  opacity: 1;
+  position: absolute;
+  top: 0px;
+  left: 0px;
+  border-radius: 20px;
+  transform-style: preserve-3d;
+}
+
+/* Inner card face (Figma: .v6_7 with images/v6_7.png) in team colours. */
+.v6_7 {
+  width: 305px;
+  height: 435px;
+  background:
+    repeating-linear-gradient(115deg, rgba(255, 255, 255, 0.12) 0 10px, transparent 10px 22px),
+    linear-gradient(160deg, var(--team), var(--team-2, #25272b));
+  opacity: 1;
+  position: absolute;
+  top: 22px;
+  left: 24px;
+  border-radius: 12px;
+  transform-style: preserve-3d;
+  transform: translateZ(10px);
+}
+
+/* Panels (Figma: .v6_2 art, .v6_4 name bar, .v6_6 details), each lifted in Z. */
+.v6_2,
+.v6_4,
+.v6_6 {
+  width: 305px;
+  background: rgba(248, 243, 238, 1);
+  opacity: 1;
+  position: absolute;
+  left: 0px;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18);
+}
+.v6_2 {
+  height: 256px;
+  top: 0px;
+}
+.v6_4 {
+  height: 42px;
+  top: 281px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+}
+.v6_6 {
+  height: 95px;
+  top: 340px;
+  padding: 10px 14px;
+}
+.layer {
+  transform: translateZ(calc(var(--depth, 0) * 1px));
+}
+
+/* Art: oversized so it can slide inside its panel for inner parallax. */
+.art {
+  position: absolute;
+  inset: -16px;
+  background-size: cover;
+  background-position: center;
+  transform: translate(calc(var(--px) * -12px), calc(var(--py) * -10px)) scale(1.02);
+  transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.tracking .art {
+  transition: transform 0.08s linear;
+}
+.badge {
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--team);
+  color: #fff;
+  font-weight: 900;
+  font-size: 18px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+}
+.card-no {
+  position: absolute;
+  right: 10px;
+  bottom: 8px;
+  font-weight: 800;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+.name {
+  font-weight: 900;
+  font-size: 18px;
+}
+.flag {
+  font-weight: 700;
+  font-size: 12px;
+  color: #5b6472;
+}
+.team {
+  font-weight: 800;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--team);
+  margin-bottom: 6px;
+}
+.stats {
+  display: grid;
+  gap: 5px;
+}
+.stat {
+  display: grid;
+  grid-template-columns: 70px 1fr 24px;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 800;
+}
+.stat .bar {
+  height: 7px;
+  border-radius: 99px;
+  background: rgba(14, 27, 43, 0.1);
+  overflow: hidden;
+}
+.stat .bar i {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background: var(--team);
+}
+.stat b {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Glossy highlight that follows the pointer. */
+.shine {
+  position: absolute;
+  inset: 0;
+  border-radius: 20px;
+  pointer-events: none;
+  transform: translateZ(70px);
+  background: radial-gradient(circle at calc(50% + var(--px) * 50%) calc(50% + var(--py) * 50%), rgba(255, 255, 255, 0.28), transparent 45%);
+  mix-blend-mode: soft-light;
+}
+
+/* Controls. */
+.card-nav {
+  position: absolute;
+  bottom: 22px;
+  left: 50%;
+  translate: -50% 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: #f4f5f7;
+  font-weight: 800;
+  z-index: 2;
+}
+.card-nav button {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font: inherit;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+.card-nav button:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+.card-nav button:focus-visible,
+.back-link:focus-visible {
+  outline: 3px solid rgb(var(--glow));
+  outline-offset: 2px;
+}
+.back-link {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  color: #f4f5f7;
+  font-weight: 800;
+  text-decoration: none;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  z-index: 2;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-tilt,
+  .art {
+    transform: none !important;
+    transition: none !important;
+  }
+  .v6_8::before {
+    transform: none;
+    transition: none;
+  }
+}

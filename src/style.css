@@ -25,6 +25,11 @@ button {
 }
 button:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(14, 27, 43, 0.14); }
 button:focus-visible { outline: 3px solid #1e4fd8; outline-offset: 2px; }
+.btn-link {
+  font-weight: 800; font-size: 14px; color: var(--ink); text-decoration: none; background: #fff;
+  border: 1px solid var(--line); border-radius: 999px; padding: 9px 16px; box-shadow: 0 2px 6px rgba(14, 27, 43, 0.08);
+}
+.btn-link:focus-visible { outline: 3px solid #1e4fd8; outline-offset: 2px; }
 button.primary { background: var(--ink); color: #fff; border-color: var(--ink); }
 button[aria-pressed='true'] { background: #2d7ff9; color: #fff; border-color: #2d7ff9; }
 

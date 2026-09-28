@@ -82,6 +82,22 @@ Covers build-order steps 1 to 3 and most of 4 and 5 from the spec:
   strategists, podium picks with champagne. Tab/Enter/Escape work everywhere,
   touch uses tap and long press, and reduced motion swaps glides for fades.
 
+## Driver cards
+
+`/card/` is a collectible card page built from the Figma export (`card/css/main.css`
+and `card/index.html`). It keeps the export's structure, class names and card
+sizes. Each card shows one team's garage-car driver, with art rendered from the
+game.
+
+The card has a parallax tilt that follows the mouse, or the phone's tilt:
+- the glow, face, art, name and details sit at different depths;
+- the art slides inside its panel;
+- a shine follows the pointer;
+- the circuit background drifts the other way.
+
+Use ‹ › or the arrow keys to switch cards. The tilt switches off when the
+system is set to reduce motion.
+
 ## Not yet done
 
 - Character creator, glTF export and LODs (build step 6).
@@ -105,6 +121,7 @@ src/game/              layout, paths and speed profile, driving, paddock,
                        pit stop rules and challenge, game controller
 src/fx/                post stack (outline, tilt-shift, grade), particles, rain
 src/camera.js          orbit rig with eased glides, rotate/tilt/turntable
+card/                  Figma card page: index.html, css/main.css, js/card.js, images/
 src/drive.js           drive mode: physics, cockpit/T-cam/chase cameras, wheel display, laps
 src/explore.js         walk mode: places, viewpoints, walkable surfaces, collisions
 src/audio.js           procedural engine and crowd sound

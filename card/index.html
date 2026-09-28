@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sky Circuit Cards</title>
+    <meta name="description" content="Collectible Sky Circuit driver cards with a parallax tilt." />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet" />
+    <link href="./css/main.css" rel="stylesheet" />
+  </head>
+  <body>
+    <!-- Structure and class names come from the Figma export (v6_8 page, v4_4 / v4_7 guides,
+         v4_9 glow, v4_10 rim, v6_7 inner card, v6_2 / v6_4 / v6_6 panels). -->
+    <div class="v6_8" id="stage">
+      <div class="v4_4" aria-hidden="true"></div>
+      <div class="v4_7" aria-hidden="true"></div>
+
+      <div class="card-scene">
+        <div class="card-tilt" id="card" role="img" aria-live="polite">
+          <div class="v4_9" aria-hidden="true"></div>
+          <div class="v4_10">
+            <div class="v6_7">
+              <div class="v6_2 layer" data-depth="40">
+                <div class="art" id="art"></div>
+                <span class="badge" id="badge">#4</span>
+                <span class="card-no" id="cardNo">No. 0001</span>
+              </div>
+              <div class="v6_4 layer" data-depth="55">
+                <span class="name" id="name">Inés Calder</span>
+                <span class="flag" id="from">Spain</span>
+              </div>
+              <div class="v6_6 layer" data-depth="45">
+                <div class="team" id="team">Solaris Racing</div>
+                <div class="stats" id="stats"></div>
+              </div>
+            </div>
+          </div>
+          <div class="shine" aria-hidden="true"></div>
+        </div>
+      </div>
+
+      <nav class="card-nav" aria-label="Choose a card">
+        <button id="prev" aria-label="Previous card">‹</button>
+        <span id="count" aria-live="polite">1 / 5</span>
+        <button id="next" aria-label="Next card">›</button>
+      </nav>
+      <a class="back-link" href="/">← Back to Sky Circuit</a>
+    </div>
+    <script type="module" src="./js/card.js"></script>
+  </body>
+</html>
