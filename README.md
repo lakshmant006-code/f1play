@@ -92,7 +92,7 @@ game.
 The card has a parallax tilt that follows the mouse, or the phone's tilt:
 - the glow, face, art, name and details sit at different depths;
 - the art slides inside its panel;
-- a shine follows the pointer;
+- a shine follows the pointer, and a rainbow hologram foil slides across the card as it tilts (it drifts slowly when the card is at rest);
 - the circuit background drifts the other way.
 
 Use ‹ › or the arrow keys to switch cards. The tilt switches off when the

@@ -268,6 +268,51 @@ body {
   mix-blend-mode: soft-light;
 }
 
+/* Hologram foil: a rainbow band and fine diagonal glitter lines that slide
+   across the card as it tilts, so the colours shift like a real holo card. */
+.holo {
+  position: absolute;
+  inset: 0;
+  border-radius: 20px;
+  pointer-events: none;
+  transform: translateZ(66px);
+  background:
+    repeating-linear-gradient(
+      115deg,
+      rgba(255, 0, 132, 0.9) 0%,
+      rgba(255, 190, 0, 0.9) 7%,
+      rgba(90, 255, 120, 0.9) 14%,
+      rgba(0, 220, 255, 0.9) 21%,
+      rgba(140, 90, 255, 0.9) 28%,
+      rgba(255, 0, 132, 0.9) 35%
+    ),
+    repeating-linear-gradient(
+      -45deg,
+      rgba(255, 255, 255, 0) 0 3px,
+      rgba(255, 255, 255, 0.35) 3px 4px
+    );
+  background-size: 300% 300%, 100% 100%;
+  background-position:
+    calc(50% + var(--px) * 60%) calc(50% + var(--py) * 60%),
+    0 0;
+  background-blend-mode: overlay;
+  mix-blend-mode: color-dodge;
+  opacity: calc(0.3 + max(var(--px), calc(var(--px) * -1)) * 0.15 + max(var(--py), calc(var(--py) * -1)) * 0.12);
+  filter: saturate(1.4) brightness(0.62);
+  transition: opacity 0.2s;
+}
+/* Resting cards keep a slow foil drift so the shine shows without a mouse. */
+.card-tilt:not(.tracking) .holo {
+  animation: holo-drift 6s ease-in-out infinite alternate;
+}
+@keyframes holo-drift {
+  from { background-position: 20% 30%, 0 0; }
+  to { background-position: 80% 70%, 0 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .card-tilt:not(.tracking) .holo { animation: none; }
+}
+
 /* Controls. */
 .card-nav {
   position: absolute;
