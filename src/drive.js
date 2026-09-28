@@ -9,7 +9,7 @@
 
 import * as THREE from 'three';
 import { CAR } from './car/car.js';
-import { TRACK_WIDTH, PIT_Z, PIT_WIDTH } from './game/layout.js';
+import { TRACK_WIDTH, PIT_WALL_Z } from './game/layout.js';
 import { h } from './ui/ui.js';
 import { deg } from './geo.js';
 
@@ -326,7 +326,7 @@ export class PlayerDrive {
     const onIsland = g.onIsland(smp.pos.x + n.x * lat, smp.pos.z + n.z * lat);
     const limit = onIsland ? TRACK_WIDTH / 2 + 4.8 : TRACK_WIDTH / 2 + 1.5;
     const lat2 = this.pos.clone().sub(smp.pos).dot(n);
-    const pitWallZ = PIT_Z + PIT_WIDTH / 2 + 1.7;
+    const pitWallZ = PIT_WALL_Z + 1.1;
     let hit = false;
     if (Math.abs(lat2) > limit) {
       this.pos.addScaledVector(n, (Math.sign(lat2) * limit - lat2));

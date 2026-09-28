@@ -150,6 +150,7 @@ export class Game {
     const n = this.teams.filter((t) => t.launch).length;
     let k = 0;
     for (const team of this.teams) {
+      this.actors.push(...(team.deckCrew || []));
       if (!team.launch) continue;
       const tc = team.trackCar;
       tc.drive = new CarDriver(tc, this.track, this.pit, { s: 60 + (k * this.track.length) / n, pace: 1 });
@@ -691,7 +692,7 @@ export class Game {
   focusStrategist(team) {
     this.focus = { kind: 'strategist', team };
     const st = team.crew.strategist;
-    this.focusView(st.root.position.clone().add(V(-0.6, 1.1, 0)), { distance: 5.5, elevation: 24, azimuth: -Math.PI / 2 + 0.5 });
+    this.focusView(st.root.position.clone().add(V(0, 1.1, 0.4)), { distance: 5.5, elevation: 24, azimuth: st.root.rotation.y + 0.5 });
     st.anim.play('lean_to_screen');
     this.showStrategistCard(team);
   }

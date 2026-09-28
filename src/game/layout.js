@@ -10,8 +10,16 @@ const v = (x, z) => new THREE.Vector3(x, 0, z);
 
 export const TRACK_WIDTH = 12;
 export const PIT_WIDTH = 8;
-export const PIT_Z = -47.5;
-export const GARAGE_FRONT_Z = -53;
+export const PIT_Z = -54;
+export const GARAGE_FRONT_Z = -59.5;
+// Pit wall barrier on the track side, and the team pit wall decks between it
+// and the pit lane (four stands side by side, facing the track).
+export const PIT_WALL_Z = -42.6;
+export const DECK_Z = -45.6;
+export const DECK_W = 9.6;
+export const DECK_D = 3.2;
+export const DECK_H = 0.35;
+export const DECK_X = [-16.2, -5.4, 5.4, 16.2];
 export const GARAGE_DEPTH = 9;
 
 export const TRACK_POINTS = [
