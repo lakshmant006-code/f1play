@@ -22,7 +22,7 @@ const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 scene.environmentIntensity = 0.55;
 
-const camera = new THREE.PerspectiveCamera(32, window.innerWidth / window.innerHeight, 0.5, 2000);
+const camera = new THREE.PerspectiveCamera(32, window.innerWidth / window.innerHeight, 0.5, 1400);
 const post = createPost(renderer, scene, camera);
 const rig = new CameraRig(camera, canvas, post);
 const ui = new UI(document.getElementById('ui'));

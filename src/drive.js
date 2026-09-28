@@ -58,16 +58,16 @@ function buildSteeringWheel(team) {
   canvas.height = 128;
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
-  const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.12, 0.06), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }));
+  const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.12, 0.06), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }));
   // Screen, LEDs and buttons face the driver (-Z); paddles sit behind (+Z).
-  screen.position.set(0, 0.012, -0.0185);
+  screen.position.set(0, 0.012, -0.024); // clear of the wheel face so it never z-fights
   screen.rotation.y = Math.PI;
   // Rev LEDs across the top.
   const leds = [];
   for (let i = 0; i < 15; i++) {
-    const m = new THREE.MeshBasicMaterial({ color: '#222', toneMapped: false });
+    const m = new THREE.MeshBasicMaterial({ color: '#222', toneMapped: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
     const led = new THREE.Mesh(new THREE.CircleGeometry(0.0055, 8), m);
-    led.position.set(0.084 - i * 0.012, 0.063, -0.0185);
+    led.position.set(0.084 - i * 0.012, 0.063, -0.024);
     led.rotation.y = Math.PI;
     leds.push(led);
     g.add(led);
@@ -76,7 +76,7 @@ function buildSteeringWheel(team) {
   const colors = ['#E03A3A', '#F5C518', '#2D7FF9', '#35B04A', '#ffffff', '#F26B1D'];
   colors.forEach((c, i) => {
     const b = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.008, 10).rotateX(Math.PI / 2), new THREE.MeshStandardMaterial({ color: c, roughness: 0.4 }));
-    b.position.set((i % 2 ? 1 : -1) * (0.085 + Math.floor(i / 2) * 0.001), -0.035 + Math.floor(i / 2) * 0.022, -0.02);
+    b.position.set((i % 2 ? 1 : -1) * (0.085 + Math.floor(i / 2) * 0.001), -0.035 + Math.floor(i / 2) * 0.022, -0.024);
     buttons.push(b);
   });
   g.add(body, top, screen, ...grips, ...buttons);
@@ -140,7 +140,7 @@ export class PlayerDrive {
     car.drive = this; // the game loop now updates us, and audio reads v
     // A real steering wheel in the cockpit.
     this.wheel = buildSteeringWheel(team.data);
-    this.wheel.position.set(0, 0.665, 0.32);
+    this.wheel.position.set(0, 0.63, 0.3); // low in the frame, like an onboard shot
     this.wheel.rotation.x = deg(22); // top leans toward the nose, face tilted up at the driver
     car.nodes.body.add(this.wheel);
     // Camera.
@@ -442,7 +442,7 @@ export class PlayerDrive {
     if (this.cam === 'cockpit') {
       // Eye just under the halo hoop, looking down the nose.
       const eye = V(0, 0.765 + shake + buzz, -0.1).applyMatrix4(car.nodes.body.matrixWorld);
-      const look = V(0, 0.42, 6).applyMatrix4(car.nodes.body.matrixWorld);
+      const look = V(0, 0.62, 6).applyMatrix4(car.nodes.body.matrixWorld);
       cam.position.copy(eye);
       cam.up.set(0, 1, 0);
       cam.lookAt(look);

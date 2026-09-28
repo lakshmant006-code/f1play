@@ -609,14 +609,20 @@ export function buildTrackBoards(track, ranges, onIsland) {
   atlas.anisotropy = 4;
   const faces = [];
   const backs = [];
+  const placed = [];
   const smp = {};
   let k = 0;
   for (const [a, b, side] of ranges) {
     for (let s = a; s < b; s += 7) {
       track.at(s, smp);
       const n = V(smp.tan.z, 0, -smp.tan.x);
+      // Skip the inside of bends (boards would cross) and keep boards apart.
+      if (Math.sign(smp.curv) === side && Math.abs(smp.curv) > 0.02) continue;
+      if (Math.abs(smp.curv) > 0.06) continue;
       const p = smp.pos.clone().addScaledVector(n, side * (TRACK_WIDTH / 2 + 2.2));
       if (!onIsland(p.x, p.z)) continue;
+      if (placed.some((q) => q.distanceTo(p) < 7.2)) continue;
+      placed.push(p);
       const rot = Math.atan2(-side * n.x, -side * n.z);
       const row = k++ % brands.length;
       const face = new THREE.PlaneGeometry(6.4, 0.8);

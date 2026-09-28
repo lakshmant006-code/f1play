@@ -402,34 +402,80 @@ export function buildTrackMeshes(track, pit, onIsland = () => true) {
     g.add(new THREE.Mesh(ribbon(pit, 0.1, 0.04, { from: 14, to: pit.length - 14, offset: s * (PIT_WIDTH / 2 - 0.2) }), lineMat));
   }
 
-  // Kerbs: alternating red/white blocks on corner edges (one instanced draw call).
-  const kerbSpots = [];
+  // Kerbs: continuous strips swept along the track edge through each corner,
+  // with a raised rounded profile and crisp red/white stripes that follow the
+  // curve, so nothing overlaps or flickers. One vertex-colored mesh.
   const smp = {};
-  for (let s = 0; s < track.length; s += 1.6) {
-    track.at(s, smp);
-    if (Math.abs(smp.curv) < 0.035) continue;
-    const inside = Math.sign(smp.curv); // +1: left side is inside
-    for (const side of [inside, -inside]) {
-      if (side === -inside && Math.abs(smp.curv) < 0.06) continue;
-      kerbSpots.push({ pos: smp.pos.clone(), tan: smp.tan.clone(), side, red: Math.round(s / 1.6) % 2 === 0 });
+  const STEP = 0.5;
+  const N = Math.ceil(track.length / STEP);
+  const kerbGeos = [];
+  for (const side of [1, -1]) {
+    // Where this side needs a kerb: the inside of every corner, the outside of tight ones.
+    let on = Array.from({ length: N }, (_, i) => {
+      track.at(i * STEP, smp);
+      const k = smp.curv;
+      return Math.abs(k) > 0.035 && (Math.sign(k) === side || Math.abs(k) > 0.06);
+    });
+    // Grow each run a little and close small gaps so kerbs start and end cleanly.
+    const grow = Math.round(3 / STEP);
+    on = on.map((_, i) => {
+      for (let d = -grow; d <= grow; d++) if (on[(i + d + N) % N]) return true;
+      return false;
+    });
+    // Sweep each stripe (1.5 m, colored by its index along the lap).
+    const STRIPE = 1.5;
+    const profile = [[-0.05, 0.034], [0.18, 0.075], [0.92, 0.075], [1.12, 0.03]];
+    const red = new THREE.Color(PALETTE.kerbRed);
+    const white = new THREE.Color(PALETTE.kerbWhite);
+    for (let st = 0; st < track.length / STRIPE; st++) {
+      const s0 = st * STRIPE;
+      const s1 = Math.min(track.length, s0 + STRIPE);
+      if (!on[Math.floor(((s0 + s1) / 2) / STEP) % N]) continue;
+      const color = st % 2 ? red : white;
+      const pos = [];
+      const idx = [];
+      const cols = [];
+      const steps = 4;
+      for (let k = 0; k <= steps; k++) {
+        track.at(s0 + ((s1 - s0) * k) / steps, smp);
+        const nx = smp.tan.z * side;
+        const nz = -smp.tan.x * side;
+        for (const [lat, y] of profile) {
+          const off = TRACK_WIDTH / 2 + lat;
+          pos.push(smp.pos.x + nx * off, y, smp.pos.z + nz * off);
+          cols.push(color.r, color.g, color.b);
+        }
+        if (k) {
+          const P = profile.length;
+          for (let j = 0; j < P - 1; j++) {
+            const a0 = (k - 1) * P + j;
+            const b0 = k * P + j;
+            if (side > 0) idx.push(a0, a0 + 1, b0, a0 + 1, b0 + 1, b0);
+            else idx.push(a0, b0, a0 + 1, a0 + 1, b0, b0 + 1);
+          }
+        }
+      }
+      const kg = new THREE.BufferGeometry();
+      kg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      kg.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+      kg.setIndex(idx);
+      kg.computeVertexNormals();
+      // Guarantee upward-facing normals whichever way the path winds.
+      if (kg.attributes.normal.getY(1) < 0) {
+        const ix = kg.index.array;
+        for (let i = 0; i < ix.length; i += 3) [ix[i + 1], ix[i + 2]] = [ix[i + 2], ix[i + 1]];
+        kg.computeVertexNormals();
+      }
+      kerbGeos.push(kg);
     }
   }
-  const kerbGeo = new THREE.BoxGeometry(1.0, 0.08, 1.55);
-  const kerbs = new THREE.InstancedMesh(kerbGeo, mat('#ffffff', { roughness: 0.6 }), kerbSpots.length);
+  if (kerbGeos.length) {
+    const kerbs = new THREE.Mesh(merge(kerbGeos, { color: true }), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55 }));
+    kerbs.receiveShadow = true;
+    g.add(kerbs);
+  }
   const m = new THREE.Matrix4();
-  const q = new THREE.Quaternion();
   const col = new THREE.Color();
-  kerbSpots.forEach((k, i) => {
-    const nx = k.tan.z;
-    const nz = -k.tan.x;
-    const off = k.side * (TRACK_WIDTH / 2 + 0.4);
-    q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.atan2(k.tan.x, k.tan.z));
-    m.compose(new THREE.Vector3(k.pos.x + nx * off, 0.04, k.pos.z + nz * off), q, new THREE.Vector3(1, 1, 1));
-    kerbs.setMatrixAt(i, m);
-    kerbs.setColorAt(i, col.set(k.red ? PALETTE.kerbRed : PALETTE.kerbWhite));
-  });
-  kerbs.receiveShadow = true;
-  g.add(kerbs);
 
   // Tire walls on the outside of corners, kept clear of the rest of the track.
   const walls = [];
