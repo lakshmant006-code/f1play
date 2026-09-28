@@ -19,6 +19,7 @@ import { COMPOUNDS, DRIVERS, teamById, driverByNumber, surname, PIT } from '../d
 import { h } from '../ui/ui.js';
 import { Explorer, PLACES } from '../explore.js';
 import { SoundScape } from '../audio.js';
+import { PlayerDrive } from '../drive.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const deg = THREE.MathUtils.degToRad;
@@ -63,11 +64,12 @@ export class Game {
       dom: renderer.domElement,
       post,
       onHover: (e, source) => this.onHover(e, source),
-      onEscape: () => (this.explorer.active ? null : this.ui.modal.hidden ? this.goHome() : this.ui.closeModal()),
+      onEscape: () => (this.explorer.active || this.player.active ? null : this.ui.modal.hidden ? this.goHome() : this.ui.closeModal()),
     });
     this.registerInteractions();
     this.explorer = new Explorer(this);
     this.audio = new SoundScape(this);
+    this.player = new PlayerDrive(this);
     this.bindUI();
   }
 
@@ -354,9 +356,11 @@ export class Game {
   // Extra things to do in an area, shown in the walking panel.
   placeActions(id) {
     if (id === 'pit') {
-      return this.teams
-        .filter((t) => t.launch)
-        .map((t) => ({ label: `Pit stop · ${t.data.name.split(' ')[0]}`, onClick: () => { this.explorer.exit(); this.after(1, () => this.pitChallenge.start(t)); } }));
+      const launch = this.teams.filter((t) => t.launch);
+      return [
+        ...launch.map((t) => ({ label: `🏎 Drive #${t.garageCar.number}`, onClick: () => this.driveCar(t) })),
+        ...launch.map((t) => ({ label: `Pit stop · ${t.data.name.split(' ')[0]}`, onClick: () => { this.explorer.exit(); this.after(1, () => this.pitChallenge.start(t)); } })),
+      ];
     }
     if (id === 'tower') {
       return [{ label: 'Live timing', onClick: () => this.showTimingModal() }];
@@ -383,6 +387,20 @@ export class Game {
     );
   }
 
+  driveCar(team) {
+    if (this.player.active) return;
+    if (team.garageCar.drive?.mode !== 'parked') {
+      this.ui.toast('That car is already out. Try the other one.', { icon: '⏳' });
+      return;
+    }
+    this.ui.closeModal();
+    this.ui.hideCard();
+    this.ui.hideTag();
+    this.interactions.setHover(null);
+    this.interactions.enabled = false;
+    this.player.start(team);
+  }
+
   walkInto(id) {
     this.ui.hideCard();
     this.ui.hideTag();
@@ -390,7 +408,7 @@ export class Game {
   }
 
   focusView(target, { distance, elevation, azimuth, follow = null, minEl = 15, maxEl = 60 }) {
-    if (this.explorer?.active) return; // walking: the camera stays with you
+    if (this.explorer?.active || this.player?.active) return; // walking or driving: the camera stays with you
     this.rig.setElevationRange(minEl, maxEl);
     this.rig.goTo({ target, distance, elevation: deg(elevation), azimuth, offset: V(0, 0.5, 0) }, { follow });
     this.ui.back.hidden = false;
@@ -424,7 +442,10 @@ export class Game {
     const actions = [];
     const canView = car.display || mode === 'parked';
     if (canView) actions.push({ label: this.liveryView === car ? 'Exit livery viewer' : 'Livery viewer', onClick: () => (this.liveryView === car ? this.exitLiveryView() : this.enterLiveryView(car)) });
-    if (!car.display && mode === 'parked' && car.driver) actions.push({ label: 'Take it out', primary: true, onClick: () => this.takeItOut(car) });
+    if (!car.display && mode === 'parked' && car.driver) {
+      actions.push({ label: '🏎 Drive it', primary: true, onClick: () => this.driveCar(team) });
+      actions.push({ label: 'Watch a lap', onClick: () => this.takeItOut(car) });
+    }
     if (mode === 'track' && team.trackCar === car) actions.push({ label: 'Pit stop challenge', primary: true, onClick: () => this.pitChallenge.start(team) });
     actions.push({ label: 'Back', onClick: () => this.goHome() });
     this.ui.showCard({
@@ -658,7 +679,7 @@ export class Game {
   // Cars on track ordered by laps and distance, for the tower's timing board.
   standings() {
     const cars = this.teams.flatMap((t) => t.cars).filter((c) => c.drive && c.drive.mode !== 'parked');
-    return cars.sort((a, b) => (b.drive.time - b.drive.lapStart) - (a.drive.time - a.drive.lapStart) || a.number - b.number);
+    return cars.sort((a, b) => (b.drive.time - (b.drive.lapStart ?? b.drive.time)) - (a.drive.time - (a.drive.lapStart ?? a.drive.time)) || a.number - b.number);
   }
 
   // Card for an area with a Walk in button.
@@ -860,6 +881,19 @@ export class Game {
       this.setRain(!this.rain);
       rainBtn.setAttribute('aria-pressed', String(this.rain));
     });
+    document.getElementById('btn-drive').addEventListener('click', () => {
+      if (this.player.active) return;
+      const launch = this.teams.filter((t) => t.launch);
+      const content = h(
+        'div',
+        {},
+        h('h2', {}, 'Drive a car'),
+        h('p', {}, 'Take a car out for a lap from the cockpit. W/↑ go, S/↓ brake, A/D steer, Space for DRS, C to change camera.'),
+        h('div', { class: 'place-list' }, launch.map((t) => h('button', { class: 'place', style: { borderLeft: `6px solid ${t.data.primary}` }, onclick: () => this.driveCar(t) }, h('b', {}, `#${t.garageCar.number} ${t.garageCar.driver.data.name}`), h('span', {}, t.data.name)))),
+        h('div', { class: 'row' }, h('button', { onclick: () => this.ui.closeModal() }, 'Cancel'))
+      );
+      this.ui.openModal(content);
+    });
     document.getElementById('btn-explore').addEventListener('click', () => {
       const content = h(
         'div',
@@ -894,6 +928,7 @@ export class Game {
           h('h2', {}, 'How to play'),
           h('ul', {}, [
             'Drag to rotate the islands, scroll or pinch to zoom, right drag to pan. Use the ↺ ↻ ▲ ▼ buttons or ⟳ Auto for a turntable.',
+            'Press 🏎 Drive to take a car out from the cockpit: W/↑ go, S/↓ brake, A/D steer, Space DRS, C camera, Esc leave.',
             'Click any island, the grandstand, pit building, watch tower or podium to walk straight in (WASD or arrows, drag to look, Esc to leave).',
             'Hover or long press anything to see who it is; click or tap to visit.',
             'Tab cycles through cars, drivers and crew; Enter selects; Escape goes back.',
@@ -948,7 +983,7 @@ export class Game {
     for (const a of this.actors) if (a.root.visible) a.update(dt);
     this.pitChallenge.update(dt);
     this.explorer.update(dt);
-    this.audio.update(this.explorer.active);
+    this.audio.update(this.explorer.active || this.player.active);
     this.updateCelebration(dt);
     this.particles.update(dt);
     this.rainFx.update(dt, this.rig.controls.target);

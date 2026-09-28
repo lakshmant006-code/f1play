@@ -54,6 +54,17 @@ Covers build-order steps 1 to 3 and most of 4 and 5 from the spec:
 - **Rotate the islands**: drag to orbit all the way round, from nearly level to
   overhead (8° to 85°), and scroll or pinch to zoom. The ↺ ↻ ▲ ▼ buttons step
   the view, ⟳ Auto turns it like a turntable, and ⌂ resets it.
+- **Drive**: take Calder's #4 or Holm's #8 out yourself from the *Drive* button,
+  a garage car's card, or the pit island's walking panel.
+  - **Cockpit view** like an F1 onboard shot: the halo and centre pillar, and a
+    steering wheel that turns with the front wheels. Its screen shows gear,
+    speed and lap time, with rev LEDs and buttons.
+  - **Other cameras**: C switches to the T-cam or a chase camera.
+  - **Handling**: arcade physics with a grip limit, and DRS on the straights
+    (Space). Walls sit at the track edge and tighter barriers on the bridges.
+  - **Lap timing** with a best lap saved on this device.
+  - **Controls**: W/↑ throttle, S/↓ brake and reverse, A/D or ←/→ to steer, Esc
+    to leave. Phones get on-screen pedals and steering.
 - **Walk in**: one click on the grandstand, pit building, watch tower, podium, or
   anywhere on an island's ground takes you straight in to explore it on foot at
   eye level. You can also use the *Walk in* button. WASD or
@@ -94,6 +105,7 @@ src/game/              layout, paths and speed profile, driving, paddock,
                        pit stop rules and challenge, game controller
 src/fx/                post stack (outline, tilt-shift, grade), particles, rain
 src/camera.js          orbit rig with eased glides, rotate/tilt/turntable
+src/drive.js           drive mode: physics, cockpit/T-cam/chase cameras, wheel display, laps
 src/explore.js         walk mode: places, viewpoints, walkable surfaces, collisions
 src/audio.js           procedural engine and crowd sound
 src/interact.js        hover, click, keyboard and touch
