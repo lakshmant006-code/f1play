@@ -91,3 +91,18 @@ describe('PitStopRun in any order', () => {
     expect(run.releaseTime).toBeCloseTo(0.5 + PIT.cornerDuration + PIT.jackDrop + PIT.releaseDelay);
   });
 });
+
+describe('PitStopRun with a manual corner', () => {
+  it('waits for the player to tighten, and rejects an early tighten', () => {
+    const run = new PitStopRun(['FL', 'FR', 'RL', 'RR'], PIT, { anyOrder: true, manual: ['FL'] });
+    ['FR', 'RL', 'RR'].forEach((c, i) => run.tap(c, 0.1 + i * 0.05));
+    expect(run.tap('FL', 0.3)).toBe('ok');
+    const fit = 0.3 + 0.75 * PIT.cornerDuration;
+    expect(run.tighten('FL', fit - 0.1)).toBe('early');
+    expect(run.releaseTime).toBeNull();
+    expect(run.corner('FL', fit + 0.5).phase).toBe('await_gun');
+    expect(run.tighten('FL', fit + 0.2)).toBe('ok');
+    expect(run.cornersDone).toBeCloseTo(fit + 0.2 + 0.25 * PIT.cornerDuration);
+    expect(run.corner('FL', fit + 0.2 + 0.01).phase).toBe('gun_on');
+  });
+});

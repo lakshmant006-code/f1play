@@ -232,7 +232,7 @@ $('save').addEventListener('click', () => {
   const snapshot = cardSnapshot();
   const ok = saveRecipe(recipe, snapshot);
   $('saved').innerHTML = ok
-    ? `Saved <b>#${recipe.number} ${escapeHtml(recipe.name)}</b>. <a href="/card/">See your card</a> or <a href="/">find yourself in the paddock</a>.`
+    ? `Saved <b>#${recipe.number} ${escapeHtml(recipe.name)}</b>. Play as <a href="/?play=driver">driver</a>, <a href="/?play=mechanic">mechanic</a> or <a href="/?play=engineer">race engineer</a>, or <a href="/card/">see your card</a>.`
     : 'Could not save in this browser (storage is blocked).';
 });
 

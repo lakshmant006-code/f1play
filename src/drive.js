@@ -193,6 +193,7 @@ export class PlayerDrive {
     document.body.classList.remove('walking', 'driving');
     this.hud?.remove();
     this.pads?.remove();
+    this.onStop?.();
     document.body.classList.remove('touch-drive');
     this.touch = { throttle: 0, brake: 0, steer: 0, handbrake: 0 };
     if (this.wentFullscreen && document.fullscreenElement) document.exitFullscreen?.().catch(() => {});

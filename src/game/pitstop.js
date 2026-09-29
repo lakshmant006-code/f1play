@@ -9,6 +9,7 @@ import { PitStopRun, grade } from './pitstopRules.js';
 import { pitStations } from './paddock.js';
 import { PIT, CORNERS, COMPOUNDS } from '../data.js';
 import { h } from '../ui/ui.js';
+import { wheelgun, loadRecipe, DEFAULT_RECIPE } from '../character/blocky.js';
 
 const CORNER_NAME = { FL: 'Front left', FR: 'Front right', RL: 'Rear left', RR: 'Rear right' };
 const BEST_KEY = 'skycircuit.bestPitStop';
@@ -37,7 +38,12 @@ export class PitChallenge {
     this.lastResult = null;
   }
 
-  start(team) {
+  // opts: { mechanic } you are the front-left gunner, in first person (the
+  // crew does the other three corners); { auto } the crew does all four;
+  // { natural } the car comes in on its own lap instead of a quick fade;
+  // { silent } no HUD; { compound } tires to fit; { keepCamera };
+  // { onDone(result) } after the stop; { onExit() } when the player leaves.
+  start(team, opts = {}) {
     const g = this.game;
     if (this.active) return;
     const car = team.trackCar;
@@ -46,10 +52,15 @@ export class PitChallenge {
     this.aborted = false;
     this.team = team;
     this.car = car;
-    this.run = new PitStopRun(CORNERS, PIT, { anyOrder: true });
+    this.opts = opts;
+    this.mine = opts.mechanic ? 'FL' : null;
+    this.run = new PitStopRun(CORNERS, PIT, { anyOrder: true, manual: this.mine ? [this.mine] : [] });
+    this.aiTaps = {};
+    if (opts.auto || this.mine) for (const c of CORNERS) if (c !== this.mine) this.aiTaps[c] = 0.08 + Math.random() * 0.28;
+    this.lockUntil = 0;
     this.t = 0;
     this.phase = 'inlap';
-    this.nextCompound = g.nextCompound[team.data.id] || 'soft';
+    this.nextCompound = opts.compound || g.nextCompound[team.data.id] || 'soft';
     this.stations = pitStations(team);
     this.cornerState = Object.fromEntries(CORNERS.map((c) => [c, 'ready']));
     this.jackState = 'ready';
@@ -58,24 +69,33 @@ export class PitChallenge {
     team.jackF.visible = team.jackR.visible = team.releaseBox.visible = true;
     team.releaseBox.userData.setGreen(false);
     for (const [key, st] of Object.entries(this.stations)) {
-      team.crew[key].walkTo(st.pos, st.heading, { clip: st.clip, run: true });
+      team.crew[key].walkTo(st.pos, st.heading, { clip: st.clip, run: !this.mine || key !== `gun_${this.mine}` });
     }
 
-    // Skip the in-lap: behind a quick fade the car is put in the pit lane a
-    // short run before its box, already at the pit limiter.
     const d = car.drive;
-    this.fade(() => {
-      for (const c of CORNERS) car.wheels[c].position.set(0, 0, 0);
-      car.lift(0);
+    if (opts.natural) {
+      // The car boxes at the end of its lap.
       d.requestPit(team.gx, () => this.onBoxed());
-      d.mode = 'pit';
-      d.pace = 1;
-      d.s = Math.max(0, d.boxS - 26);
-      d.v = 11;
-      d.place();
-    });
-    g.focusBox(team);
-    g.ui.toast(`<b>${team.data.name}:</b> Box, box! Tap all four wheels as fast as you can.`, { icon: '🎧', accent: team.data.primary, duration: 2600 });
+    } else {
+      // Skip the in-lap: behind a quick fade the car is put in the pit lane a
+      // short run before its box, already at the pit limiter.
+      this.fade(() => {
+        for (const c of CORNERS) car.wheels[c].position.set(0, 0, 0);
+        car.lift(0);
+        d.requestPit(team.gx, () => this.onBoxed());
+        d.mode = 'pit';
+        d.pace = 1;
+        d.s = Math.max(0, d.boxS - 26);
+        d.v = 11;
+        d.place();
+      });
+    }
+    if (this.mine) this.enterFirstPerson();
+    else if (!opts.keepCamera) g.focusBox(team);
+    if (!opts.silent) {
+      const msg = this.mine ? 'Box, box! You are on the front-left wheel gun: gun off, then tighten when the new tire is on.' : 'Box, box! Tap all four wheels as fast as you can.';
+      g.ui.toast(`<b>${team.data.name}:</b> ${msg}`, { icon: '🎧', accent: team.data.primary, duration: 3200 });
+    }
     this.buildHud();
   }
 
@@ -101,39 +121,128 @@ export class PitChallenge {
     }
   }
 
+  // ---- First person (mechanic) -------------------------------------------------------
+
+  enterFirstPerson() {
+    const g = this.game;
+    this.fp = true;
+    g.rig.frozen = true;
+    g.rig.controls.enabled = false;
+    g.rig.stopAutoRotate?.();
+    g.post.setTilt(0);
+    g.camera.fov = 68;
+    g.camera.near = 0.05;
+    g.camera.updateProjectionMatrix();
+    g.ui.hideCard();
+    g.interactions.enabled = false;
+    document.body.classList.add('walking', 'pit-fp');
+    // Our own body stays out of view; our hands and the wheel gun are.
+    const me = this.team.crew[`gun_${this.mine}`];
+    me.root.visible = false;
+    if (!this.hands) this.hands = buildGunHands(this.opts.recipe);
+    if (!g.camera.parent) g.scene.add(g.camera);
+    g.camera.add(this.hands);
+    this.fpLook = null;
+  }
+
+  exitFirstPerson() {
+    if (!this.fp) return;
+    const g = this.game;
+    this.fp = false;
+    this.hands?.removeFromParent();
+    this.hands = null;
+    const me = this.team.crew[`gun_${this.mine}`];
+    me.root.visible = true;
+    document.body.classList.remove('walking', 'pit-fp');
+    g.post.setTilt(1);
+    g.camera.fov = 32;
+    g.camera.near = 0.5;
+    g.camera.updateProjectionMatrix();
+    g.rig.controls.enabled = true;
+    g.rig.frozen = false;
+    g.interactions.enabled = true;
+    g.focusBox(this.team);
+    this.opts.onExit?.();
+  }
+
+  // Kneeling at the front-left station, looking at the wheel nut.
+  updateFirstPerson(dt) {
+    const g = this.game;
+    const st = this.stations[`gun_${this.mine}`];
+    const car = this.car;
+    const wheel = car.wheels[this.mine].getWorldPosition(new THREE.Vector3());
+    const fwd = new THREE.Vector3(Math.sin(st.heading), 0, Math.cos(st.heading));
+    // A step back and to the outside, so the tire changer beside us stays out of the way.
+    const side = new THREE.Vector3(fwd.z, 0, -fwd.x);
+    const eye = st.pos.clone().addScaledVector(fwd, -0.95).addScaledVector(side, -0.5);
+    const boxed = this.phase === 'running' || this.phase === 'released';
+    eye.y = boxed ? 1.15 : 1.6; // stand while the car comes in, crouch for the stop
+    const t = performance.now() / 1000;
+    eye.y += Math.sin(t * 1.7) * 0.006;
+    const look = boxed ? wheel.clone().setY(wheel.y + 0.05) : car.root.position.clone().setY(0.6);
+    this.fpLook = this.fpLook ? this.fpLook.lerp(look, Math.min(1, dt * 6)) : look;
+    this.fpEye = this.fpEye ? this.fpEye.lerp(eye, Math.min(1, dt * 5)) : eye;
+    g.camera.position.copy(this.fpEye);
+    g.camera.up.set(0, 1, 0);
+    g.camera.lookAt(this.fpLook);
+    // The gun kicks when it fires.
+    if (this.hands) {
+      this.kick = Math.max(0, (this.kick || 0) - dt * 6);
+      this.hands.position.set(0.34, -0.24 + this.kick * 0.03, -0.55 + this.kick * 0.05);
+    }
+  }
+
   // Fixed pad at the bottom: a timer, and four wheel buttons laid out like the
   // car seen from above (front at the top). Keyboard: Space taps the next wheel.
+  // As the mechanic: one big wheel gun button instead.
   buildHud() {
     const g = this.game;
     const hud = g.ui.hud;
     this.timeEl = h('div', { class: 'time', 'aria-live': 'off' }, '0.00');
     this.metaEl = h('div', { class: 'meta' }, 'Car coming in…');
     this.wheelBtns = {};
-    const wheel = (c) => {
-      const b = h('button', { class: 'pit-wheel', 'aria-label': `${CORNER_NAME[c]} wheel`, disabled: true }, c);
-      // Pointer down for instant response on touch; click covers keyboard activation.
-      b.addEventListener('pointerdown', (e) => {
+    let pad;
+    if (this.mine) {
+      this.gunBtn = h('button', { class: 'pit-gun', disabled: true, 'aria-label': 'Wheel gun' }, 'GUN OFF');
+      this.gunBtn.addEventListener('pointerdown', (e) => {
         e.preventDefault();
-        this.tap(c);
+        this.gunPress();
       });
-      b.addEventListener('click', (e) => {
-        if (e.detail === 0) this.tap(c);
+      this.gunBtn.addEventListener('click', (e) => {
+        if (e.detail === 0) this.gunPress();
       });
-      this.wheelBtns[c] = b;
-      return b;
-    };
-    const pad = h('div', { class: 'pit-pad', role: 'group', 'aria-label': 'Wheels, front at the top' }, wheel('FL'), h('div', { class: 'pit-car', 'aria-hidden': 'true' }), wheel('FR'), wheel('RL'), h('div', { class: 'pit-car rear', 'aria-hidden': 'true' }), wheel('RR'));
-    hud.replaceChildren(h('div', { class: 'pit-body' }, this.timeEl, this.metaEl), pad, h('button', { class: 'pit-quit', onclick: () => this.abort(), 'aria-label': 'Quit the pit stop challenge' }, '✕'));
+      pad = this.gunBtn;
+    } else {
+      const wheel = (c) => {
+        const b = h('button', { class: 'pit-wheel', 'aria-label': `${CORNER_NAME[c]} wheel`, disabled: true }, c);
+        // Pointer down for instant response on touch; click covers keyboard activation.
+        b.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          this.tap(c);
+        });
+        b.addEventListener('click', (e) => {
+          if (e.detail === 0) this.tap(c);
+        });
+        this.wheelBtns[c] = b;
+        return b;
+      };
+      pad = h('div', { class: 'pit-pad', role: 'group', 'aria-label': 'Wheels, front at the top' }, wheel('FL'), h('div', { class: 'pit-car', 'aria-hidden': 'true' }), wheel('FR'), wheel('RL'), h('div', { class: 'pit-car rear', 'aria-hidden': 'true' }), wheel('RR'));
+    }
+    hud.replaceChildren(h('div', { class: 'pit-body' }, this.timeEl, this.metaEl), pad, h('button', { class: 'pit-quit', onclick: () => this.abort(), 'aria-label': 'Quit the pit stop' }, '✕'));
     hud.classList.add('pit');
     hud.classList.remove('result');
-    hud.hidden = false;
+    hud.hidden = !!this.opts.silent;
     g.ui.markers.replaceChildren();
     this.markers = {};
     if (!this.keyHandler) {
       this.keyHandler = (e) => {
-        if (!this.active || e.repeat || (e.key !== ' ' && e.key !== 'Enter')) return;
+        if (!this.active || this.opts.silent || e.repeat || (e.key !== ' ' && e.key !== 'Enter')) return;
         if (e.target?.closest?.('.pit-quit')) return;
         e.preventDefault();
+        if (this.mine) {
+          this.gunPress();
+          return;
+        }
         const next = CORNERS.find((c) => this.run.cornerStart[c] === undefined);
         if (next) this.tap(next);
       };
@@ -148,15 +257,28 @@ export class PitChallenge {
       b.disabled = this.phase !== 'running' || this.run.cornerStart[c] !== undefined;
       b.classList.toggle('done', this.run.cornerStart[c] !== undefined);
     }
+    if (this.gunBtn) {
+      const c = this.mine;
+      const started = this.run.cornerStart[c] !== undefined;
+      const tightened = this.run.tightenAt[c] !== undefined;
+      const fitted = started && this.t >= this.run.fittedAt(c);
+      this.gunBtn.disabled = this.phase !== 'running' || tightened;
+      this.gunBtn.textContent = !started ? 'GUN OFF' : tightened ? 'DONE ✓' : fitted ? 'TIGHTEN!' : 'WAIT…';
+      this.gunBtn.classList.toggle('ready', this.phase === 'running' && (!started || (fitted && !tightened)));
+      this.gunBtn.classList.toggle('done', tightened);
+    }
   }
 
   onBoxed() {
     this.phase = 'running';
     this.t = 0;
-    this.metaEl.textContent = `GO! Tap all four · target ${PIT.target.toFixed(1)} s`;
-    const hud = this.game.ui.hud;
-    hud.classList.add('go');
-    setTimeout(() => hud.classList.remove('go'), 450);
+    if (!this.opts.silent) {
+      this.metaEl.textContent = this.mine ? 'GO! Gun off!' : `GO! Tap all four · target ${PIT.target.toFixed(1)} s`;
+      const hud = this.game.ui.hud;
+      hud.classList.add('go');
+      setTimeout(() => hud.classList.remove('go'), 450);
+      navigator.vibrate?.(30);
+    }
     this.refreshOrder();
   }
 
@@ -166,6 +288,35 @@ export class PitChallenge {
       navigator.vibrate?.(10);
       const left = CORNERS.filter((c) => this.run.cornerStart[c] === undefined).length;
       this.metaEl.textContent = left ? `${left} to go` : 'Guns on… jacks down…';
+    }
+    this.refreshOrder();
+  }
+
+  // The mechanic's one button: first press loosens the nut, the second
+  // tightens it once the new tire is on. Too early costs a fumble.
+  gunPress() {
+    if (!this.active || this.phase !== 'running' || this.t < this.lockUntil) return;
+    const c = this.mine;
+    this.kick = 1;
+    if (this.run.cornerStart[c] === undefined) {
+      this.run.tap(c, this.t);
+      navigator.vibrate?.(15);
+      this.metaEl.textContent = 'Nut off! Tire coming off…';
+      this.game.audio?.thud?.();
+    } else {
+      const r = this.run.tighten(c, this.t);
+      if (r === 'early') {
+        this.run.fumbles++;
+        this.lockUntil = this.t + PIT.wrongTapPenalty;
+        this.metaEl.textContent = 'Too early! Wait for the new tire.';
+        this.gunBtn.classList.remove('wrong');
+        void this.gunBtn.offsetWidth;
+        this.gunBtn.classList.add('wrong');
+        navigator.vibrate?.([20, 40, 20]);
+      } else if (r === 'ok') {
+        navigator.vibrate?.(15);
+        this.metaEl.textContent = 'Tight! Jacks down…';
+      }
     }
     this.refreshOrder();
   }
@@ -182,7 +333,12 @@ export class PitChallenge {
       if (d.pitRequest) d.pitRequest.onBoxed = () => d.release();
       this.finishCrew();
       this.cleanup();
+      this.exitFirstPerson();
       return;
+    }
+    if (this.mine && this.run.tightenAt[this.mine] === undefined) {
+      if (this.run.cornerStart[this.mine] === undefined) this.run.tap(this.mine, this.t);
+      this.run.tightenAt[this.mine] = Math.max(this.t, this.run.fittedAt(this.mine));
     }
     this.aborted = true;
   }
@@ -212,6 +368,7 @@ export class PitChallenge {
 
   update(dt) {
     this.stepFade(dt);
+    if (this.fp) this.updateFirstPerson(dt);
     if (!this.active) return;
     const car = this.car;
     const team = this.team;
@@ -225,6 +382,9 @@ export class PitChallenge {
       this.t += dt;
       const t = this.t;
       const run = this.run;
+      // Crew hands on the other corners.
+      for (const [c, at] of Object.entries(this.aiTaps)) if (t >= at && run.cornerStart[c] === undefined) run.tap(c, t);
+      if (this.mine) this.refreshOrder();
       this.timeEl.textContent = t.toFixed(2);
       car.lift(run.jackHeight(t));
       const lifted = run.jackHeight(t) > 0.02;
@@ -294,14 +454,19 @@ export class PitChallenge {
     this.finishCrew();
     const aborted = this.aborted;
     this.aborted = false;
-    this.cleanup({ keepHud: !aborted });
-    if (aborted) return;
+    this.cleanup({ keepHud: !aborted && !this.opts.silent && !this.opts.auto });
+    if (aborted) {
+      this.exitFirstPerson();
+      return;
+    }
 
+    const result = { time, fumbles: this.run.fumbles, team: team.data.id, teamName: team.data.name, number: car.number, date: new Date().toISOString(), compound: this.nextCompound, role: this.mine ? 'mechanic' : this.opts.auto ? 'crew' : 'player' };
+    this.lastResult = result;
+    this.opts.onDone?.(result);
+    if (this.opts.silent || this.opts.auto) return;
     const best = loadBest();
     const isBest = !best || time < best.time;
-    const result = { time, fumbles: this.run.fumbles, team: team.data.id, teamName: team.data.name, number: car.number, date: new Date().toISOString(), compound: this.nextCompound };
     if (isBest) saveBest(result);
-    this.lastResult = result;
     g.onPitResult?.(result);
     this.showResult(result, isBest ? null : best);
   }
@@ -312,20 +477,26 @@ export class PitChallenge {
     const hud = g.ui.hud;
     const gr = grade(result.time);
     const delta = result.time - PIT.target;
+    const done = () => {
+      hud.hidden = true;
+      hud.classList.remove('pit', 'result');
+      if (this.fp) this.exitFirstPerson();
+      else g.goHome();
+    };
     hud.classList.add('pit', 'result');
     hud.replaceChildren(
       h(
         'div',
         { class: 'pit-body' },
         h('div', { class: 'time' }, `${result.time.toFixed(2)}s`),
-        h('div', { class: 'meta' }, h('b', {}, gr.label), ` · ${delta < 0 ? '' : '+'}${delta.toFixed(2)} s vs ${PIT.target.toFixed(1)} s`, h('br'), best ? `Best ${best.time.toFixed(2)} s` : '★ New personal best!')
+        h('div', { class: 'meta' }, h('b', {}, gr.label), ` · ${delta < 0 ? '' : '+'}${delta.toFixed(2)} s vs ${PIT.target.toFixed(1)} s${result.fumbles ? ` · ${result.fumbles} fumble${result.fumbles > 1 ? 's' : ''}` : ''}`, h('br'), best ? `Best ${best.time.toFixed(2)} s` : '★ New personal best!')
       ),
       h(
         'div',
         { class: 'pit-actions' },
-        h('button', { class: 'primary', onclick: () => this.start(this.team) }, '↻ Go again'),
+        h('button', { class: 'primary', onclick: () => this.start(this.team, { ...this.opts }) }, '↻ Go again'),
         h('button', { onclick: () => this.shareCard(result) }, 'Share'),
-        h('button', { onclick: () => { hud.hidden = true; hud.classList.remove('pit', 'result'); g.goHome(); } }, 'Done')
+        h('button', { onclick: done }, 'Done')
       )
     );
     hud.hidden = false;
@@ -408,4 +579,32 @@ function roundRect(ctx, x, y, w, hgt, r) {
   ctx.arcTo(x, y + hgt, x, y, r);
   ctx.arcTo(x, y, x + w, y, r);
   ctx.closePath();
+}
+
+// First-person hands for the mechanic: the player's gloves on a wheel gun.
+function buildGunHands(recipe) {
+  const r = { ...DEFAULT_RECIPE, ...(loadRecipe()?.recipe || {}), ...(recipe || {}) };
+  const g = new THREE.Group();
+  const gun = wheelgun(r);
+  gun.scale.setScalar(0.62);
+  gun.rotation.set(-0.15, Math.PI + 0.25, 0);
+  g.add(gun);
+  const glove = new THREE.MeshStandardMaterial({ color: r.gloves === 'bare' ? r.skin : r.gloves === 'starInverse' ? r.primary : '#1c1d20', roughness: 0.6 });
+  const sleeve = new THREE.MeshStandardMaterial({ color: r.primary, roughness: 0.6 });
+  for (const [x, y, z] of [[0.02, -0.12, 0.12], [-0.14, 0.02, 0.02]]) {
+    const hand = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.1, 0.12), glove);
+    hand.position.set(x, y, z);
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.35), sleeve);
+    arm.position.set(x + 0.02, y - 0.03, z + 0.24);
+    g.add(hand, arm);
+  }
+  g.traverse((o) => {
+    if (o.isMesh) {
+      o.castShadow = false;
+      o.renderOrder = 10;
+    }
+  });
+  g.scale.setScalar(0.75);
+  g.position.set(0.34, -0.24, -0.55);
+  return g;
 }

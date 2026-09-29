@@ -20,6 +20,8 @@ import { h } from '../ui/ui.js';
 import { Explorer, PLACES } from '../explore.js';
 import { SoundScape } from '../audio.js';
 import { PlayerDrive } from '../drive.js';
+import { EngineerMode } from './engineer.js';
+import { RolePlay } from './roles.js';
 import { buildCharacter, animateCharacter, setPose, loadRecipe, EMOTES, PRESETS, SUITS, GLOVES, BROWS, MOUTHS, SKINS, SWATCHES } from '../character/blocky.js';
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -67,13 +69,15 @@ export class Game {
       dom: renderer.domElement,
       post,
       onHover: (e, source) => this.onHover(e, source),
-      onEscape: () => (this.explorer.active || this.player.active ? null : this.ui.modal.hidden ? this.goHome() : this.ui.closeModal()),
+      onEscape: () => (this.explorer.active || this.player.active || this.engineer?.active || this.pitChallenge?.fp ? null : this.ui.modal.hidden ? this.goHome() : this.ui.closeModal()),
     });
     this.addMyCharacter();
     this.registerInteractions();
     this.explorer = new Explorer(this);
     this.audio = new SoundScape(this);
     this.player = new PlayerDrive(this);
+    this.engineer = new EngineerMode(this);
+    this.roles = new RolePlay(this);
     this.bindUI();
   }
 
@@ -994,6 +998,7 @@ export class Game {
       this.ui.openModal(content);
     });
     document.getElementById('btn-podium').addEventListener('click', () => this.focusPodium());
+    document.getElementById('btn-play')?.addEventListener('click', () => this.roles.open());
     const rainBtn = document.getElementById('btn-rain');
     rainBtn.addEventListener('click', () => {
       this.setRain(!this.rain);
@@ -1101,8 +1106,9 @@ export class Game {
     for (const a of this.actors) if (a.root.visible) a.update(dt);
     if (this.me) animateCharacter(this.me.root, dt);
     this.pitChallenge.update(dt);
+    this.engineer.update(dt);
     this.explorer.update(dt);
-    this.audio.update(this.explorer.active || this.player.active);
+    this.audio.update(this.explorer.active || this.player.active || this.engineer.active || !!this.pitChallenge.fp);
     this.updateCelebration(dt);
     this.particles.update(dt);
     this.rainFx.update(dt, this.rig.controls.target);

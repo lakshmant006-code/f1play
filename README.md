@@ -69,6 +69,18 @@ Covers build-order steps 1 to 3 and most of 4 and 5 from the spec:
   grade and best show right in the pad, with one-tap *Go again*, *Share*
   (a result card with a holo border under 2.4 s) and *Done*. Best time is
   saved locally.
+- **Play as**: your own character from the creator takes a job in the team,
+  each in first person (🎮 *Play as*, or the links after saving a character):
+  - **Driver**: drive from the cockpit; you are the one in the seat in the
+    T-cam and chase views.
+  - **Mechanic**: pit stops only. You are the front-left wheel gunner, crouched
+    at the wheel with the gun in your gloves: gun off when the car stops,
+    tighten when the new tyre is on (too early is a fumble). The crew does the
+    other three corners.
+  - **Race engineer**: radio only, from your team's pit wall seat. Call the
+    pace (push, balanced, save tyres), box for softs, mediums, hards or inters,
+    and react to rain and the driver's reports. Tyres wear with the pace and
+    suit the weather or not; the view follows the car or you can look around.
 - **Menu**: on phones and narrow windows the top bar is just the brand, the
   player chip and a ☰ button that opens every game action in a frosted
   dropdown (it closes on a pick, a tap outside or Escape). The camera buttons
