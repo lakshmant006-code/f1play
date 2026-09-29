@@ -1,3 +1,5 @@
+import { icon } from './icons.js';
+
 // Hamburger menu for narrow screens: the top bar keeps the brand, the player
 // chip and a ☰ button; the game actions open as a dropdown panel. Choosing an
 // action, tapping outside or pressing Escape closes it. Wide screens show the
@@ -12,6 +14,7 @@ export function initMenu() {
     bar.classList.toggle('menu-open', open);
     btn.setAttribute('aria-expanded', String(open));
     btn.setAttribute('aria-label', open ? 'Close menu' : 'Menu');
+    btn.innerHTML = `<span class="ico" aria-hidden="true">${icon(open ? 'close' : 'menu')}</span>`;
     if (open) nav.querySelector('button, a')?.focus({ preventScroll: true });
   };
   btn.addEventListener('click', (e) => {
@@ -32,5 +35,5 @@ export function initMenu() {
     }
   });
   // Leaving the narrow layout resets it.
-  matchMedia('(max-width: 1000px)').addEventListener?.('change', () => set(false));
+  matchMedia('(max-width: 900px)').addEventListener?.('change', () => set(false));
 }

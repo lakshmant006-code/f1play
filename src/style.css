@@ -334,39 +334,7 @@ body.landing-on .topbar, body.landing-on .view-ctl, body.landing-on .card, body.
   .landing-note { margin-top: 6px; }
 }
 
-/* Hamburger menu (narrow screens): brand, player chip and ☰; the actions open
-   as a frosted dropdown under the bar. */
-.menu-btn { display: none; }
-@media (max-width: 1000px) {
-  .topbar { justify-content: flex-start; flex-wrap: nowrap; }
-  .menu-btn {
-    display: grid; place-items: center; margin-left: auto; width: 46px; height: 46px; padding: 0; border-radius: 50%;
-    background: var(--paper); box-shadow: var(--shadow);
-  }
-  .menu-icon { display: grid; gap: 4px; width: 20px; }
-  .menu-icon i { display: block; height: 3px; border-radius: 2px; background: var(--ink); transition: transform 0.2s, opacity 0.2s; }
-  .menu-open .menu-icon i:nth-child(1) { transform: translateY(7px) rotate(45deg); }
-  .menu-open .menu-icon i:nth-child(2) { opacity: 0; }
-  .menu-open .menu-icon i:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
-  .actions-top {
-    position: absolute; top: calc(100% - 4px); right: 16px; width: min(280px, calc(100vw - 32px));
-    display: grid; grid-template-columns: 1fr; justify-content: stretch; gap: 6px; padding: 10px; border-radius: 20px;
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.55));
-    -webkit-backdrop-filter: blur(18px) saturate(170%); backdrop-filter: blur(18px) saturate(170%);
-    border: 1px solid rgba(255, 255, 255, 0.7); box-shadow: 0 14px 36px rgba(14, 27, 43, 0.22);
-    max-height: calc(100vh - 90px); overflow: auto;
-    opacity: 0; visibility: hidden; transform: translateY(-6px); transition: opacity 0.18s, transform 0.18s, visibility 0s 0.18s;
-  }
-  .menu-open .actions-top { opacity: 1; visibility: visible; transform: none; transition: opacity 0.18s, transform 0.18s; }
-  .actions-top > button, .actions-top > a { width: 100%; text-align: left; justify-content: flex-start; font-size: 15px; padding: 11px 14px; border-radius: 14px; }
-  .actions-top > .btn-link { display: block; }
-  #btn-help { width: 100%; }
-}
-@media (max-width: 1000px) and (prefers-reduced-motion: reduce) {
-  .actions-top, .menu-open .actions-top, .menu-icon i { transition: none; }
-}
-.menu-label { display: none; }
-@media (max-width: 1000px) { .menu-label { display: inline; } }
+
 /* Traction control button: flashes amber while TC is cutting power or catching a slide. */
 .drive-hud .tc-btn.active { background: #F5C518; color: #0e1b2b; border-color: #F5C518; }
 
@@ -418,4 +386,135 @@ body.pit-fp .actions-top, body.pit-fp .menu-btn, body.pit-fp .profile-chip { dis
 @media (max-width: 640px), (max-height: 500px) {
   .eng-panel { top: auto; bottom: max(8px, env(safe-area-inset-bottom)); max-height: 46vh; }
   .eng-log { max-height: 90px; }
+}
+
+/* ---- Top bar (after the reference): chips on the left, one white capsule of
+   icon buttons on the right with the player's avatar and number badge first.
+   Icons are solid; names show as tooltips; the active toggle sits on a light
+   grey square. Under 900 px the capsule becomes a dropdown behind a round
+   menu button, with the names shown beside the icons. */
+.topbar { align-items: flex-start; }
+.top-left { display: flex; align-items: center; gap: 10px; pointer-events: auto; }
+.ico { display: inline-grid; place-items: center; width: 1em; height: 1em; font-size: 24px; line-height: 0; }
+.ico svg { width: 1em; height: 1em; display: block; }
+.brand { font-size: 17px; padding: 10px 16px; }
+.stat-pill, .profile-chip {
+  display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 16px; border-radius: 999px;
+  background: var(--paper); box-shadow: var(--shadow); font-weight: 800; font-size: 16px; color: var(--ink); border: none;
+}
+.stat-pill .ico { font-size: 22px; color: #c9a646; }
+.profile-chip.icon-only { width: 44px; padding: 0; justify-content: center; }
+.profile-chip .ico { font-size: 22px; }
+.actions-top {
+  display: flex; align-items: center; gap: 4px; padding: 6px 8px; border-radius: 22px;
+  background: rgba(255, 255, 255, 0.94); box-shadow: 0 6px 18px rgba(14, 27, 43, 0.12);
+}
+.actions-top > button, .actions-top > a:not(.avatar-btn) {
+  position: relative; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: none;
+  border-radius: 12px; background: transparent; color: #111317; box-shadow: none; cursor: pointer; text-decoration: none;
+  transition: background 0.15s;
+}
+.actions-top > button:hover, .actions-top > a:not(.avatar-btn):hover { background: #f0f1f3; }
+.actions-top > button[aria-pressed='true'] { background: #e6e8ec; color: #111317; border: none; }
+.actions-top .lbl { display: none; }
+.actions-top .sep { width: 1px; height: 28px; margin: 0 4px; background: rgba(14, 27, 43, 0.1); }
+.avatar-btn { position: relative; display: grid; place-items: center; width: 50px; height: 50px; margin-right: 2px; text-decoration: none; color: var(--ink); }
+.avatar-btn .avatar {
+  width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; overflow: hidden;
+  background: #f3e3cf center 18% / 200% no-repeat; box-shadow: inset 0 0 0 2px #fff, 0 0 0 2px #e2c8a6;
+}
+.avatar-btn .avatar .ico { font-size: 28px; color: #8a6a4a; }
+.avatar-btn .badge {
+  position: absolute; right: -6px; bottom: -4px; min-width: 26px; height: 22px; padding: 0 6px; border-radius: 8px;
+  background: #1c1d20; color: #fff; font-weight: 900; font-size: 12px; display: grid; place-items: center; box-shadow: 0 0 0 2px #fff;
+}
+/* Tooltips, like the reference's name tags: white rounded box under the button. */
+[data-tip] { position: relative; }
+@media (hover: hover) {
+  .topbar [data-tip]:hover::after, .topbar [data-tip]:focus-visible::after {
+    content: attr(data-tip); position: absolute; top: calc(100% + 10px); left: 50%; transform: translateX(-50%);
+    padding: 6px 12px; border-radius: 10px; background: #fff; color: #111317; font-size: 13px; font-weight: 700; white-space: nowrap;
+    box-shadow: 0 4px 14px rgba(14, 27, 43, 0.16); pointer-events: none; z-index: 5;
+  }
+}
+.menu-btn { display: none; }
+body.driving .actions-top, body.driving .menu-btn, body.driving .profile-chip, body.driving .stat-pill { display: none; }
+@media (max-width: 900px) {
+  .topbar { justify-content: flex-start; flex-wrap: nowrap; }
+  .top-left { gap: 8px; }
+  .stat-pill { display: none; }
+  .menu-btn {
+    display: grid; place-items: center; margin-left: auto; width: 46px; height: 46px; padding: 0; border-radius: 50%;
+    background: var(--paper); box-shadow: var(--shadow); color: #111317; border: none;
+  }
+  .actions-top {
+    position: absolute; top: calc(100% - 4px); right: 16px; width: min(290px, calc(100vw - 32px));
+    display: grid; grid-template-columns: 1fr; gap: 4px; padding: 10px; border-radius: 20px;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.66));
+    -webkit-backdrop-filter: blur(18px) saturate(170%); backdrop-filter: blur(18px) saturate(170%);
+    border: 1px solid rgba(255, 255, 255, 0.7); box-shadow: 0 14px 36px rgba(14, 27, 43, 0.22);
+    max-height: calc(100vh - 90px); overflow: auto;
+    opacity: 0; visibility: hidden; transform: translateY(-6px); transition: opacity 0.18s, transform 0.18s, visibility 0s 0.18s;
+  }
+  .menu-open .actions-top { opacity: 1; visibility: visible; transform: none; transition: opacity 0.18s, transform 0.18s; }
+  .actions-top > button, .actions-top > a:not(.avatar-btn), .avatar-btn {
+    display: flex; justify-content: flex-start; gap: 12px; width: 100%; height: 46px; padding: 0 12px; border-radius: 14px;
+  }
+  .avatar-btn { height: 56px; }
+  .avatar-btn .badge { position: static; margin-left: auto; }
+  .actions-top .lbl { display: inline; font-size: 15px; font-weight: 800; }
+  .actions-top .sep { width: auto; height: 1px; margin: 2px 6px; }
+}
+@media (max-width: 900px) and (prefers-reduced-motion: reduce) {
+  .actions-top, .menu-open .actions-top { transition: none; }
+}
+/* Camera controls in the same capsule style, tooltips above. */
+.view-ctl { gap: 4px; padding: 6px 8px; border-radius: 22px; background: rgba(255, 255, 255, 0.94); box-shadow: 0 6px 18px rgba(14, 27, 43, 0.12); }
+.view-ctl button { position: relative; display: grid; place-items: center; width: 44px; height: 44px; min-width: 0; padding: 0; border: none; border-radius: 12px; background: transparent; color: #111317; box-shadow: none; }
+.view-ctl button:hover { background: #f0f1f3; }
+.view-ctl button[aria-pressed='true'] { background: #e6e8ec; color: #111317; }
+@media (hover: hover) {
+  .view-ctl [data-tip]:hover::after {
+    content: attr(data-tip); position: absolute; bottom: calc(100% + 10px); left: 50%; transform: translateX(-50%);
+    padding: 6px 12px; border-radius: 10px; background: #fff; color: #111317; font-size: 13px; font-weight: 700; white-space: nowrap;
+    box-shadow: 0 4px 14px rgba(14, 27, 43, 0.16); pointer-events: none;
+  }
+}
+@media (max-width: 640px) { .view-ctl button { width: 38px; height: 38px; } .view-ctl .ico { font-size: 21px; } }
+@media (max-width: 900px) {
+  .avatar-btn .lbl { order: 1; }
+  .avatar-btn .badge { order: 2; }
+}
+
+/* Track picker (drive menu). */
+.track-pick { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 4px 0 6px; }
+.track-card { display: grid; grid-template-rows: auto auto 1fr; gap: 4px; text-align: left; padding: 8px 8px 10px; border-radius: 14px; align-content: start; }
+.track-card .track-swatch { display: block; height: 46px; border-radius: 10px; }
+.track-card b { font-size: 15px; }
+.track-card span:last-child { font-weight: 600; font-size: 12px; line-height: 1.35; color: var(--ink-2); }
+.track-card[aria-checked='true'] { outline: 3px solid var(--ink); outline-offset: 0; }
+@media (max-width: 480px) { .track-pick { grid-template-columns: 1fr; } .track-card .track-swatch { height: 28px; } }
+
+/* Water on the lens after driving through the waterfall. */
+.splash-fx { position: fixed; inset: 0; pointer-events: none; z-index: 1; animation: splash-fade 3s ease-out forwards; }
+.splash-fx i {
+  position: absolute; border-radius: 50%; translate: -50% -50%;
+  background: radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.85), rgba(210, 235, 250, 0.35) 35%, rgba(160, 200, 225, 0.12) 60%, transparent 72%);
+  box-shadow: inset -2px -3px 6px rgba(20, 40, 60, 0.18); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
+  animation: drip 3s ease-in forwards;
+}
+@keyframes splash-fade { 0% { background: rgba(225, 240, 250, 0.55); } 18% { background: rgba(225, 240, 250, 0.08); } 100% { background: transparent; opacity: 0; } }
+@keyframes drip { 0% { transform: scale(0.6); opacity: 0; } 8% { transform: scale(1); opacity: 1; } 100% { transform: translateY(70px) scale(0.9); opacity: 0; } }
+
+/* DRS open: speed streaks at the frame edges. */
+body.drs-open #ui::before {
+  content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  background: repeating-conic-gradient(from 0deg at 50% 45%, rgba(255, 255, 255, 0.16) 0deg 0.6deg, transparent 0.6deg 7deg);
+  -webkit-mask: radial-gradient(ellipse 58% 52% at 50% 45%, transparent 55%, #000 100%); mask: radial-gradient(ellipse 58% 52% at 50% 45%, transparent 55%, #000 100%);
+  animation: streaks 0.35s linear infinite;
+}
+@keyframes streaks { from { transform: rotate(0deg); } to { transform: rotate(7deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .splash-fx, .splash-fx i, body.drs-open #ui::before { animation: none; }
+  .splash-fx { display: none; }
 }

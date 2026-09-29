@@ -94,7 +94,7 @@ export function buildIslandShapes(track, pit, extras) {
 }
 
 // Marching squares on a binary grid; returns the longest loop, smoothed.
-function contour(W, H, inside, x0, z0, cell) {
+export function contour(W, H, inside, x0, z0, cell) {
   const segs = new Map();
   const key = (a) => `${a[0]},${a[1]}`;
   const link = (a, b) => {
@@ -417,11 +417,15 @@ export function buildGrandstandHD({ len = 36 } = {}) {
   finMesh.castShadow = true;
   g.add(roof, steelMesh, fascia, led, lightMesh, glass, finMesh);
 
-  // Video screen on legs at the end of the stand.
+  // Video screen on legs beside the west end of the stand, set back from the
+  // front so its legs and panel stay clear of the track (which bends close
+  // around the east end).
   const screenTex = textTexture(['SKY CIRCUIT', 'LIVE'], { w: 512, h: 256, bg: '#0E1B2B', fg: '#F4F5F7' });
   const screen = new THREE.Mesh(new THREE.PlaneGeometry(7, 3.6), new THREE.MeshStandardMaterial({ map: screenTex, emissive: '#ffffff', emissiveMap: screenTex, emissiveIntensity: 0.6 }));
-  screen.position.set(len / 2 + 4.8, 7.5, 0.3);
-  const frame = new THREE.Mesh(merge([bevelBox(7.4, 4, 0.4, 0.06).translate(len / 2 + 4.8, 7.5, 0.05), rod(V(len / 2 + 3.2, 0, 0), V(len / 2 + 3.2, 5.6, 0), 0.18, 8), rod(V(len / 2 + 6.4, 0, 0), V(len / 2 + 6.4, 5.6, 0), 0.18, 8)]), mat('#2B2F36', { roughness: 0.5 }));
+  const sx = -len / 2 - 4.2;
+  const sz = -3;
+  screen.position.set(sx, 7.5, sz + 0.3);
+  const frame = new THREE.Mesh(merge([bevelBox(7.4, 4, 0.4, 0.06).translate(sx, 7.5, sz + 0.05), rod(V(sx + 1.6, 0, sz), V(sx + 1.6, 5.6, sz), 0.18, 8), rod(V(sx - 1.6, 0, sz), V(sx - 1.6, 5.6, sz), 0.18, 8)]), mat('#2B2F36', { roughness: 0.5 }));
   frame.castShadow = true;
   g.add(frame, screen);
 

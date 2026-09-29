@@ -16,19 +16,24 @@
     <canvas id="scene" aria-label="Sky Circuit island. Press Tab to cycle through cars, drivers and crew, Enter to select, Escape to go back." tabindex="0"></canvas>
     <div id="ui">
       <header class="topbar">
-        <div class="brand"><span class="mark" aria-hidden="true"></span><span>Sky Circuit</span></div>
-        <button id="btn-menu" class="menu-btn" aria-label="Menu" aria-expanded="false" aria-controls="game-nav"><span class="menu-icon" aria-hidden="true"><i></i><i></i><i></i></span></button>
+        <div class="top-left">
+          <div class="brand"><span class="mark" aria-hidden="true"></span><span>Sky Circuit</span></div>
+          <div class="stat-pill" id="stat-pit" hidden data-tip="Best pit stop"><span class="ico" data-icon="timer" aria-hidden="true"></span><b></b></div>
+        </div>
+        <button id="btn-menu" class="menu-btn" aria-label="Menu" aria-expanded="false" aria-controls="game-nav"><span class="ico" data-icon="menu" aria-hidden="true"></span></button>
         <nav class="actions-top" id="game-nav" aria-label="Game">
-          <button id="btn-drive" class="primary">🏎 Drive</button>
-          <button id="btn-play">🎮 Play as</button>
-          <button id="btn-explore">🚶 Walk in</button>
-          <button id="btn-pit">Pit stop challenge</button>
-          <button id="btn-podium">Podium</button>
-          <button id="btn-rain" aria-pressed="false">Rain</button>
-          <a id="btn-creator" class="btn-link" href="/creator/">🧑 My character</a>
-          <a id="btn-cards" class="btn-link" href="/card/">🃏 Cards</a>
-          <a id="btn-learn" class="btn-link" href="/learn/">📘 Learn</a>
-          <button id="btn-help" aria-label="Controls help">?<span class="menu-label"> Help</span></button>
+          <a id="btn-creator" class="avatar-btn" href="/creator/" data-tip="My character" aria-label="My character"><span class="avatar" aria-hidden="true"><span class="ico" data-icon="face"></span></span><span class="badge" hidden></span><span class="lbl">My character</span></a>
+          <span class="sep" aria-hidden="true"></span>
+          <button id="btn-home" data-tip="Home" aria-label="Home"><span class="ico" data-icon="home" aria-hidden="true"></span><span class="lbl">Home</span></button>
+          <button id="btn-drive" data-tip="Drive" aria-label="Drive"><span class="ico" data-icon="drive" aria-hidden="true"></span><span class="lbl">Drive</span></button>
+          <button id="btn-play" data-tip="Play as" aria-label="Play as"><span class="ico" data-icon="play" aria-hidden="true"></span><span class="lbl">Play as</span></button>
+          <button id="btn-explore" data-tip="Walk in" aria-label="Walk in"><span class="ico" data-icon="walk" aria-hidden="true"></span><span class="lbl">Walk in</span></button>
+          <button id="btn-pit" data-tip="Pit stop challenge" aria-label="Pit stop challenge"><span class="ico" data-icon="pit" aria-hidden="true"></span><span class="lbl">Pit stop challenge</span></button>
+          <button id="btn-podium" data-tip="Podium" aria-label="Podium"><span class="ico" data-icon="podium" aria-hidden="true"></span><span class="lbl">Podium</span></button>
+          <button id="btn-rain" data-tip="Rain" aria-label="Rain" aria-pressed="false"><span class="ico" data-icon="rain" aria-hidden="true"></span><span class="lbl">Rain</span></button>
+          <a id="btn-cards" class="btn-link" href="/card/" data-tip="Cards" aria-label="Cards"><span class="ico" data-icon="cards" aria-hidden="true"></span><span class="lbl">Cards</span></a>
+          <a id="btn-learn" class="btn-link" href="/learn/" data-tip="Learn" aria-label="Learn"><span class="ico" data-icon="learn" aria-hidden="true"></span><span class="lbl">Learn</span></a>
+          <button id="btn-help" data-tip="Help" aria-label="Help"><span class="ico" data-icon="help" aria-hidden="true"></span><span class="lbl">Help</span></button>
         </nav>
       </header>
       <div id="loading" class="loading">Building the islands…</div>

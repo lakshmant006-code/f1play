@@ -81,6 +81,25 @@ export class SoundScape {
     return v;
   }
 
+  // A rush of water (driving through the waterfall): a filtered noise burst.
+  splash() {
+    const ctx = this.ctx;
+    if (!ctx || this.muted) return;
+    const len = Math.floor(ctx.sampleRate * 1.2);
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2);
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'lowpass';
+    bp.frequency.value = 2400;
+    const g = ctx.createGain();
+    g.gain.value = 0.5;
+    src.connect(bp).connect(g).connect(this.master);
+    src.start();
+  }
+
   update(active) {
     if (!this.ctx) return;
     const ctx = this.ctx;
@@ -112,12 +131,12 @@ export class SoundScape {
         v.o1.frequency.setTargetAtTime(f, t, 0.05);
         v.o2.frequency.setTargetAtTime(f * 1.505, t, 0.05);
         v.lp.frequency.setTargetAtTime(600 + speed * 60, t, 0.1);
-        const on = active && speed > 0.5 ? 0.05 + Math.min(0.12, speed / 250) : 0;
+        const on = active && speed > 0.5 && car.root.visible ? 0.05 + Math.min(0.12, speed / 250) : 0;
         v.g.gain.setTargetAtTime(on, t, 0.08);
         const p = car.root.position;
         if (v.pan.positionX) {
           v.pan.positionX.setTargetAtTime(p.x, t, 0.03);
-          v.pan.positionY.setTargetAtTime(0.5, t, 0.03);
+          v.pan.positionY.setTargetAtTime(p.y + 0.5, t, 0.03);
           v.pan.positionZ.setTargetAtTime(p.z, t, 0.03);
         } else v.pan.setPosition(p.x, 0.5, p.z);
       }

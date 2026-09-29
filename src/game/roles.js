@@ -61,7 +61,7 @@ export class RolePlay {
         h('button', { class: 'place', 'aria-pressed': role === id ? 'true' : null, onclick: () => this.play(id, team) }, h('b', {}, `${r.icon} ${r.label}`), h('span', {}, r.blurb))
       )
     );
-    g.ui.openModal(h('div', {}, h('h2', {}, 'Play as'), who, h('p', { class: 'play-label' }, 'Team'), teamRow, h('p', { class: 'play-label' }, 'Job'), roles, h('div', { class: 'row' }, h('button', { onclick: () => g.ui.closeModal() }, 'Cancel'))));
+    g.ui.openModal(h('div', {}, h('h2', {}, 'Play as'), who, h('p', { class: 'play-label' }, 'Team'), teamRow, h('p', { class: 'play-label' }, 'Track (driver)'), g.trackPicker(), h('p', { class: 'play-label' }, 'Job'), roles, h('div', { class: 'row' }, h('button', { onclick: () => g.ui.closeModal() }, 'Cancel'))));
   }
 
   play(role, team = this.game.teams.find((t) => t.launch)) {
@@ -90,7 +90,7 @@ export class RolePlay {
       g.player.onStop = null;
       this.role = null;
     };
-    g.driveCar(team);
+    g.driveCar(team, g.trackChoice);
     if (!g.player.active) g.player.onStop();
   }
 

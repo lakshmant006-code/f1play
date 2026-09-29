@@ -17,11 +17,14 @@ import { createPerson, SKIN, HAIR, attachProp, setHelmet } from '../people/perso
 import { Actor } from '../people/actor.js';
 import { COMPOUNDS, DRIVERS, teamById, driverByNumber, surname, PIT } from '../data.js';
 import { h } from '../ui/ui.js';
+import { icon } from '../ui/icons.js';
 import { Explorer, PLACES } from '../explore.js';
 import { SoundScape } from '../audio.js';
 import { PlayerDrive } from '../drive.js';
 import { EngineerMode } from './engineer.js';
 import { RolePlay } from './roles.js';
+import { DawnCircuit } from '../tracks/dawnWorld.js';
+import { TRACK_WIDTH } from './layout.js';
 import { buildCharacter, animateCharacter, setPose, loadRecipe, EMOTES, PRESETS, SUITS, GLOVES, BROWS, MOUTHS, SKINS, SWATCHES } from '../character/blocky.js';
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -52,6 +55,17 @@ export class Game {
     this.timers = [];
 
     this.buildWorld();
+    // The home circuit as the driving code sees it (Track 2 lives in tracks/).
+    this.homeCircuit = {
+      id: 'sky',
+      name: 'Sky Circuit',
+      track: this.track,
+      bestKey: 'skycircuit.bestLap',
+      pitWall: true,
+      bumps: true,
+      width: () => TRACK_WIDTH,
+      limit: (s, x, z) => (this.onIsland(x, z) ? TRACK_WIDTH / 2 + 4.8 : TRACK_WIDTH / 2 + 1.5),
+    };
     this.teams = buildTeams(scene, { track: this.track, pit: this.pit });
     this.setupCars();
     this.pitChallenge = new PitChallenge(this);
@@ -95,7 +109,7 @@ export class Game {
     const extras = [
       { shape: 'rect', x0: -44, x1: 44, z0: GARAGE_FRONT_Z - GARAGE_DEPTH - 6, z1: -40, island: 0 },
       ...pitLaneExtras,
-      { shape: 'rect', x0: L.grandstand.x - L.grandstand.len / 2 - 3, x1: L.grandstand.x + L.grandstand.len / 2 + 9, z0: L.grandstand.z - 15, z1: L.grandstand.z + 5, island: 1 },
+      { shape: 'rect', x0: L.grandstand.x - L.grandstand.len / 2 - 9, x1: L.grandstand.x + L.grandstand.len / 2 + 9, z0: L.grandstand.z - 15, z1: L.grandstand.z + 5, island: 1 },
       { shape: 'circle', x: L.tower.x, z: L.tower.z, r: 13, island: 2 },
       { shape: 'rect', x0: L.podium.x - 14, x1: -67, z0: L.podium.z - 15, z1: L.podium.z + 15, island: 3 },
     ];
@@ -442,7 +456,14 @@ export class Game {
     );
   }
 
-  driveCar(team) {
+  // Track 2 is built the first time someone drives it.
+  circuit(id) {
+    if (id !== 'dawn') return this.homeCircuit;
+    this.dawn ||= new DawnCircuit(this);
+    return this.dawn;
+  }
+
+  driveCar(team, trackId = 'sky') {
     if (this.player.active) return;
     if (team.garageCar.drive?.mode !== 'parked') {
       this.ui.toast('That car is already out. Try the other one.', { icon: '⏳' });
@@ -453,7 +474,13 @@ export class Game {
     this.ui.hideTag();
     this.interactions.setHover(null);
     this.interactions.enabled = false;
-    this.player.start(team);
+    if (trackId === 'dawn' && !this.dawn) {
+      // First visit: let the toast paint before building the world.
+      this.ui.toast('Loading Caspian Dawn…', { icon: '🌅', duration: 1500 });
+      setTimeout(() => this.player.start(team, this.circuit(trackId)), 60);
+      return;
+    }
+    this.player.start(team, this.circuit(trackId));
   }
 
   walkInto(id) {
@@ -1012,7 +1039,10 @@ export class Game {
         {},
         h('h2', {}, 'Drive a car'),
         h('p', {}, 'Take a car out for a lap from the cockpit. W/↑ go, S/↓ brake, A/D steer, Space for DRS, C to change camera.'),
-        h('div', { class: 'place-list' }, launch.map((t) => h('button', { class: 'place', style: { borderLeft: `6px solid ${t.data.primary}` }, onclick: () => this.driveCar(t) }, h('b', {}, `#${t.garageCar.number} ${t.garageCar.driver.data.name}`), h('span', {}, t.data.name)))),
+        h('p', { class: 'play-label' }, 'Track'),
+        this.trackPicker(),
+        h('p', { class: 'play-label' }, 'Car'),
+        h('div', { class: 'place-list' }, launch.map((t) => h('button', { class: 'place', style: { borderLeft: `6px solid ${t.data.primary}` }, onclick: () => this.driveCar(t, this.trackChoice) }, h('b', {}, `#${t.garageCar.number} ${t.garageCar.driver.data.name}`), h('span', {}, t.data.name)))),
         h('div', { class: 'row' }, h('button', { onclick: () => this.ui.closeModal() }, 'Cancel'))
       );
       this.ui.openModal(content);
@@ -1029,17 +1059,23 @@ export class Game {
       this.ui.openModal(content);
     });
     // View controls: rotate the islands, tilt, turntable, reset.
-    const autoBtn = h('button', { 'aria-pressed': 'false', title: 'Turntable', 'aria-label': 'Auto-rotate the islands', onclick: () => this.rig.setAutoRotate(!this.rig.controls.autoRotate) }, '⟳ Auto');
+    // Same icon style as the top bar: solid icons, tooltips, grey square when on.
+    const ib = (name, label, onclick, extra = {}) => {
+      const b = h('button', { 'aria-label': label, 'data-tip': label, onclick, ...extra });
+      b.innerHTML = `<span class="ico" aria-hidden="true">${icon(name)}</span>`;
+      return b;
+    };
+    const autoBtn = ib('spin', 'Turntable', () => this.rig.setAutoRotate(!this.rig.controls.autoRotate), { 'aria-pressed': 'false' });
     this.rig.onAutoRotate = (on) => autoBtn.setAttribute('aria-pressed', String(on));
     const view = h(
       'div',
-      { class: 'view-ctl panel', role: 'group', 'aria-label': 'Rotate the islands' },
-      h('button', { 'aria-label': 'Rotate left', title: 'Rotate left', onclick: () => this.rig.rotateBy(-Math.PI / 4) }, '↺'),
-      h('button', { 'aria-label': 'Rotate right', title: 'Rotate right', onclick: () => this.rig.rotateBy(Math.PI / 4) }, '↻'),
-      h('button', { 'aria-label': 'Tilt up', title: 'Look from higher', onclick: () => this.rig.tiltBy(deg(15)) }, '▲'),
-      h('button', { 'aria-label': 'Tilt down', title: 'Look from lower', onclick: () => this.rig.tiltBy(deg(-15)) }, '▼'),
+      { class: 'view-ctl', role: 'group', 'aria-label': 'Rotate the islands' },
+      ib('rotateLeft', 'Rotate left', () => this.rig.rotateBy(-Math.PI / 4)),
+      ib('rotateRight', 'Rotate right', () => this.rig.rotateBy(Math.PI / 4)),
+      ib('up', 'Look from higher', () => this.rig.tiltBy(deg(15))),
+      ib('down', 'Look from lower', () => this.rig.tiltBy(deg(-15))),
       autoBtn,
-      h('button', { 'aria-label': 'Reset view', title: 'Reset view', onclick: () => this.goHome() }, '⌂')
+      ib('recenter', 'Reset view', () => this.goHome())
     );
     this.ui.root.append(view);
     this.viewCtl = view;
@@ -1064,6 +1100,30 @@ export class Game {
       );
     });
     this.ui.back.addEventListener('click', () => this.goHome());
+  }
+
+  // Track cards for the drive menu; the choice is remembered for the visit.
+  trackPicker() {
+    this.trackChoice ||= 'sky';
+    const tracks = [
+      { id: 'sky', name: 'Sky Circuit', blurb: 'Track 1 · the home circuit: pit lane, grandstand, four islands. Midday.', swatch: 'linear-gradient(135deg,#74BDF0,#A6D6F7)' },
+      { id: 'dawn', name: 'Caspian Dawn', blurb: 'Track 2 · inspired by Baku: an old-city climb, a horseshoe, a waterfall to drive through and a DRS boulevard. The high bridge crosses over the low one. At dawn.', swatch: 'linear-gradient(135deg,#2C3F82,#F2A48E 60%,#FFD39A)' },
+    ];
+    const row = h('div', { class: 'track-pick', role: 'radiogroup', 'aria-label': 'Track' });
+    const render = () =>
+      row.replaceChildren(
+        ...tracks.map((t) =>
+          h(
+            'button',
+            { role: 'radio', 'aria-checked': String(this.trackChoice === t.id), class: 'track-card', onclick: () => ((this.trackChoice = t.id), render()) },
+            h('span', { class: 'track-swatch', style: { background: t.swatch }, 'aria-hidden': 'true' }),
+            h('b', {}, t.name),
+            h('span', {}, t.blurb)
+          )
+        )
+      );
+    render();
+    return row;
   }
 
   setRain(on) {
