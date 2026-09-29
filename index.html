@@ -17,7 +17,8 @@
     <div id="ui">
       <header class="topbar">
         <div class="brand"><span class="mark" aria-hidden="true"></span><span>Sky Circuit</span></div>
-        <nav class="actions-top" aria-label="Game">
+        <button id="btn-menu" class="menu-btn" aria-label="Menu" aria-expanded="false" aria-controls="game-nav"><span class="menu-icon" aria-hidden="true"><i></i><i></i><i></i></span></button>
+        <nav class="actions-top" id="game-nav" aria-label="Game">
           <button id="btn-drive" class="primary">🏎 Drive</button>
           <button id="btn-explore">🚶 Walk in</button>
           <button id="btn-pit">Pit stop challenge</button>
@@ -26,7 +27,7 @@
           <a id="btn-creator" class="btn-link" href="/creator/">🧑 My character</a>
           <a id="btn-cards" class="btn-link" href="/card/">🃏 Cards</a>
           <a id="btn-learn" class="btn-link" href="/learn/">📘 Learn</a>
-          <button id="btn-help" aria-label="Controls help">?</button>
+          <button id="btn-help" aria-label="Controls help">?<span class="menu-label"> Help</span></button>
         </nav>
       </header>
       <div id="loading" class="loading">Building the islands…</div>

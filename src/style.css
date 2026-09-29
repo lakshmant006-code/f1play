@@ -150,7 +150,7 @@ button.accent { background: #F5C518; border-color: #E0B000; }
 .joy { position: absolute; right: 24px; bottom: 150px; width: 120px; height: 120px; border-radius: 50%; background: rgba(14, 27, 43, 0.25); border: 2px solid rgba(255, 255, 255, 0.7); touch-action: none; display: grid; place-items: center; }
 .joy-knob { width: 52px; height: 52px; border-radius: 50%; background: rgba(255, 255, 255, 0.9); box-shadow: var(--shadow); pointer-events: none; }
 body.walking .view-ctl { display: none; }
-body.driving .actions-top { display: none; }
+body.driving .actions-top, body.driving .menu-btn { display: none; }
 
 /* Drive HUD: a steering-wheel style display at the bottom centre. */
 .drive-hud {
@@ -227,15 +227,11 @@ body.touch-drive .drive-hud { z-index: 2; }
 
 @media (max-width: 640px) {
   .brand { font-size: 16px; padding: 6px 12px; }
-  .actions-top button { font-size: 12px; padding: 7px 10px; }
-  .topbar { flex-direction: column; align-items: stretch; }
-  .actions-top { justify-content: flex-start; }
-  .back { top: 118px; }
-  .toast { top: 118px; }
+  .back { top: 70px; }
+  .toast { top: 70px; }
   .hud .time { font-size: 26px; min-width: 84px; }
   .hud .meta { display: none; }
   .marker { width: 56px; height: 56px; margin: -28px 0 0 -28px; }
-  .view-ctl { bottom: auto; top: 118px; right: 16px; }
   .view-ctl button { min-width: 34px; padding: 6px 8px; font-size: 12px; }
   .helmet-shot { height: 72px; }
   .card { max-height: 48vh; }
@@ -337,3 +333,37 @@ body.landing-on .topbar, body.landing-on .view-ctl, body.landing-on .card, body.
   .landing-form > .landing-guest { grid-area: q; }
   .landing-note { margin-top: 6px; }
 }
+
+/* Hamburger menu (narrow screens): brand, player chip and ☰; the actions open
+   as a frosted dropdown under the bar. */
+.menu-btn { display: none; }
+@media (max-width: 1000px) {
+  .topbar { justify-content: flex-start; flex-wrap: nowrap; }
+  .menu-btn {
+    display: grid; place-items: center; margin-left: auto; width: 46px; height: 46px; padding: 0; border-radius: 50%;
+    background: var(--paper); box-shadow: var(--shadow);
+  }
+  .menu-icon { display: grid; gap: 4px; width: 20px; }
+  .menu-icon i { display: block; height: 3px; border-radius: 2px; background: var(--ink); transition: transform 0.2s, opacity 0.2s; }
+  .menu-open .menu-icon i:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+  .menu-open .menu-icon i:nth-child(2) { opacity: 0; }
+  .menu-open .menu-icon i:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+  .actions-top {
+    position: absolute; top: calc(100% - 4px); right: 16px; width: min(280px, calc(100vw - 32px));
+    display: grid; grid-template-columns: 1fr; justify-content: stretch; gap: 6px; padding: 10px; border-radius: 20px;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.55));
+    -webkit-backdrop-filter: blur(18px) saturate(170%); backdrop-filter: blur(18px) saturate(170%);
+    border: 1px solid rgba(255, 255, 255, 0.7); box-shadow: 0 14px 36px rgba(14, 27, 43, 0.22);
+    max-height: calc(100vh - 90px); overflow: auto;
+    opacity: 0; visibility: hidden; transform: translateY(-6px); transition: opacity 0.18s, transform 0.18s, visibility 0s 0.18s;
+  }
+  .menu-open .actions-top { opacity: 1; visibility: visible; transform: none; transition: opacity 0.18s, transform 0.18s; }
+  .actions-top > button, .actions-top > a { width: 100%; text-align: left; justify-content: flex-start; font-size: 15px; padding: 11px 14px; border-radius: 14px; }
+  .actions-top > .btn-link { display: block; }
+  #btn-help { width: 100%; }
+}
+@media (max-width: 1000px) and (prefers-reduced-motion: reduce) {
+  .actions-top, .menu-open .actions-top, .menu-icon i { transition: none; }
+}
+.menu-label { display: none; }
+@media (max-width: 1000px) { .menu-label { display: inline; } }

@@ -69,6 +69,10 @@ Covers build-order steps 1 to 3 and most of 4 and 5 from the spec:
   grade and best show right in the pad, with one-tap *Go again*, *Share*
   (a result card with a holo border under 2.4 s) and *Done*. Best time is
   saved locally.
+- **Menu**: on phones and narrow windows the top bar is just the brand, the
+  player chip and a ☰ button that opens every game action in a frosted
+  dropdown (it closes on a pick, a tap outside or Escape). The camera buttons
+  stay at the bottom right.
 - **Rotate the islands**: drag to orbit all the way round, from nearly level to
   overhead (8° to 85°), and scroll or pinch to zoom. The ↺ ↻ ▲ ▼ buttons step
   the view, ⟳ Auto turns it like a turntable, and ⌂ resets it.
