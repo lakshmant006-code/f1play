@@ -6,6 +6,7 @@ import { UI } from './ui/ui.js';
 import { Game } from './game/game.js';
 import { initLanding } from './landing.js';
 import { initMenu } from './ui/menu.js';
+import { initTopbar } from './ui/topbar.js';
 import { SCENERY } from './data.js';
 
 const canvas = document.getElementById('scene');
@@ -42,6 +43,7 @@ if (playRole && game.roles && ['driver', 'mechanic', 'engineer'].includes(playRo
   game.landing.hide?.();
   setTimeout(() => game.roles.play(playRole), 900);
 }
+initTopbar(game);
 initMenu();
 
 function resize() {

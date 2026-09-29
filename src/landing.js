@@ -5,6 +5,7 @@
 
 import { TEAMS } from './data.js';
 import { h } from './ui/ui.js';
+import { icon } from './ui/icons.js';
 import { loadRecipe } from './character/recipe.js';
 
 const PLAYER_KEY = 'skycircuit.player';
@@ -48,12 +49,16 @@ export function initLanding(game) {
   const root = document.getElementById('ui');
   let player = loadPlayer();
   const chip = h('button', { class: 'profile-chip', 'aria-haspopup': 'dialog' });
-  document.querySelector('.brand')?.after(chip);
+  document.querySelector('.top-left')?.prepend(chip);
 
   const renderChip = () => {
     const t = TEAMS.find((x) => x.id === player?.team);
-    chip.replaceChildren(player ? h('span', { class: 'dot', style: { background: t?.primary || '#1fb5b0' } }) : '', player ? player.name : '👤 Sign in');
+    // Signed out: a round sign-in icon; signed in: the player's name and team.
+    chip.classList.toggle('icon-only', !player);
+    if (player) chip.replaceChildren(h('span', { class: 'dot', style: { background: t?.primary || '#1fb5b0' } }), player.name);
+    else chip.innerHTML = `<span class="ico" aria-hidden="true">${icon('personAdd')}</span>`;
     chip.title = player ? `Signed in as ${player.name}. Click to sign out.` : 'Sign in';
+    chip.dataset.tip = player ? player.name : 'Sign in';
     chip.setAttribute('aria-label', chip.title);
   };
   chip.addEventListener('click', () => {

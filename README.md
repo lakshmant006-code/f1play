@@ -81,6 +81,11 @@ Covers build-order steps 1 to 3 and most of 4 and 5 from the spec:
     pace (push, balanced, save tyres), box for softs, mediums, hards or inters,
     and react to rain and the driver's reports. Tyres wear with the pace and
     suit the weather or not; the view follows the car or you can look around.
+- **Top bar**: chips on the left (sign in, the brand, your best pit stop) and
+  one white capsule on the right: your character's avatar with its number
+  badge, then solid icon buttons (Home, Drive, Play as, Walk in, Pit stop,
+  Podium, Rain, Cards, Learn, Help) with tooltips; a toggle that is on sits
+  on a light grey square. The camera controls use the same style.
 - **Menu**: on phones and narrow windows the top bar is just the brand, the
   player chip and a ☰ button that opens every game action in a frosted
   dropdown (it closes on a pick, a tap outside or Escape). The camera buttons

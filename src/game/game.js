@@ -17,6 +17,7 @@ import { createPerson, SKIN, HAIR, attachProp, setHelmet } from '../people/perso
 import { Actor } from '../people/actor.js';
 import { COMPOUNDS, DRIVERS, teamById, driverByNumber, surname, PIT } from '../data.js';
 import { h } from '../ui/ui.js';
+import { icon } from '../ui/icons.js';
 import { Explorer, PLACES } from '../explore.js';
 import { SoundScape } from '../audio.js';
 import { PlayerDrive } from '../drive.js';
@@ -1029,17 +1030,23 @@ export class Game {
       this.ui.openModal(content);
     });
     // View controls: rotate the islands, tilt, turntable, reset.
-    const autoBtn = h('button', { 'aria-pressed': 'false', title: 'Turntable', 'aria-label': 'Auto-rotate the islands', onclick: () => this.rig.setAutoRotate(!this.rig.controls.autoRotate) }, '⟳ Auto');
+    // Same icon style as the top bar: solid icons, tooltips, grey square when on.
+    const ib = (name, label, onclick, extra = {}) => {
+      const b = h('button', { 'aria-label': label, 'data-tip': label, onclick, ...extra });
+      b.innerHTML = `<span class="ico" aria-hidden="true">${icon(name)}</span>`;
+      return b;
+    };
+    const autoBtn = ib('spin', 'Turntable', () => this.rig.setAutoRotate(!this.rig.controls.autoRotate), { 'aria-pressed': 'false' });
     this.rig.onAutoRotate = (on) => autoBtn.setAttribute('aria-pressed', String(on));
     const view = h(
       'div',
-      { class: 'view-ctl panel', role: 'group', 'aria-label': 'Rotate the islands' },
-      h('button', { 'aria-label': 'Rotate left', title: 'Rotate left', onclick: () => this.rig.rotateBy(-Math.PI / 4) }, '↺'),
-      h('button', { 'aria-label': 'Rotate right', title: 'Rotate right', onclick: () => this.rig.rotateBy(Math.PI / 4) }, '↻'),
-      h('button', { 'aria-label': 'Tilt up', title: 'Look from higher', onclick: () => this.rig.tiltBy(deg(15)) }, '▲'),
-      h('button', { 'aria-label': 'Tilt down', title: 'Look from lower', onclick: () => this.rig.tiltBy(deg(-15)) }, '▼'),
+      { class: 'view-ctl', role: 'group', 'aria-label': 'Rotate the islands' },
+      ib('rotateLeft', 'Rotate left', () => this.rig.rotateBy(-Math.PI / 4)),
+      ib('rotateRight', 'Rotate right', () => this.rig.rotateBy(Math.PI / 4)),
+      ib('up', 'Look from higher', () => this.rig.tiltBy(deg(15))),
+      ib('down', 'Look from lower', () => this.rig.tiltBy(deg(-15))),
       autoBtn,
-      h('button', { 'aria-label': 'Reset view', title: 'Reset view', onclick: () => this.goHome() }, '⌂')
+      ib('recenter', 'Reset view', () => this.goHome())
     );
     this.ui.root.append(view);
     this.viewCtl = view;
