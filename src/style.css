@@ -283,3 +283,57 @@ body.touch-drive .drive-hud:not(.compact) { transform: translateX(-50%) scale(0.
 @media (prefers-reduced-motion: reduce) { .hud.go { animation: none; } }
 /* The camera buttons step aside while the pit pad is up. */
 body:has(.hud.pit:not([hidden])) .view-ctl { display: none; }
+
+/* Landing: the live circuit turns behind a frosted sign-in card. The game UI
+   steps out of the way until the player signs in or plays as a guest. */
+body.landing-on .topbar, body.landing-on .view-ctl, body.landing-on .card, body.landing-on .back { visibility: hidden; }
+.landing {
+  position: absolute; inset: 0; display: grid; place-items: center; padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+  overflow: auto; background: linear-gradient(180deg, rgba(140, 202, 243, 0.15), rgba(14, 27, 43, 0.25)); opacity: 0; transition: opacity 0.4s;
+}
+.landing.in { opacity: 1; }
+.landing.out { opacity: 0; pointer-events: none; }
+.landing-card {
+  width: min(400px, 100%); padding: 22px 22px 16px; border-radius: 24px; color: var(--ink);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.42));
+  -webkit-backdrop-filter: blur(18px) saturate(170%); backdrop-filter: blur(18px) saturate(170%);
+  border: 1px solid rgba(255, 255, 255, 0.7); box-shadow: 0 18px 50px rgba(14, 27, 43, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  transform: translateY(12px); transition: transform 0.45s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.landing.in .landing-card { transform: none; }
+.landing-brand { display: flex; align-items: center; gap: 10px; font-weight: 900; font-size: 18px; }
+.landing-brand .mark { width: 24px; height: 24px; border-radius: 50%; background: conic-gradient(#f26b1d 0 25%, #1fb5b0 0 50%, #5b2bb5 0 75%, #1e4fd8 0); box-shadow: inset 0 0 0 4px #fff; }
+.landing h1 { margin: 10px 0 6px; font-size: 28px; line-height: 1.1; font-weight: 900; }
+.landing-tag { margin: 0 0 16px; font-size: 14px; font-weight: 700; color: var(--ink-2); }
+.landing-form { display: grid; gap: 8px; }
+.landing-form label, .landing-label { font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-2); }
+.landing-form input { font: inherit; font-weight: 800; font-size: 16px; padding: 11px 14px; border-radius: 14px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.85); color: var(--ink); }
+.landing-form input:focus-visible { outline: 3px solid #1e4fd8; outline-offset: 1px; }
+.landing-teams { display: flex; flex-wrap: wrap; gap: 6px; }
+.landing-teams button { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; padding: 6px 11px; background: rgba(255, 255, 255, 0.8); }
+.landing-teams button[aria-checked='true'] { background: var(--ink); color: #fff; border-color: var(--ink); }
+.landing .dot, .profile-chip .dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 0 2px #fff; }
+.landing-hint { min-height: 1.1em; margin: 0; font-size: 13px; font-weight: 800; color: #b3261e; }
+.landing-go { padding: 12px; font-size: 16px; border-radius: 14px; }
+.landing-guest { padding: 10px; border-radius: 14px; background: transparent; }
+.landing-welcome { display: flex; align-items: center; gap: 10px; margin: 4px 0 8px; font-size: 18px; font-weight: 900; }
+.landing-note { margin: 12px 0 0; font-size: 12px; font-weight: 700; color: var(--ink-2); text-align: center; }
+.profile-chip { display: inline-flex; align-items: center; gap: 8px; font-weight: 900; background: var(--paper); border-radius: 999px; padding: 8px 14px; box-shadow: var(--shadow); }
+@media (max-height: 480px) { .landing h1 { font-size: 22px; } .landing-tag { display: none; } .landing-card { padding: 16px; } }
+@media (prefers-reduced-motion: reduce) { .landing, .landing-card { transition: none; } }
+/* Wide screens: the card sits on the left, the circuit (shifted right) beside it. */
+@media (min-width: 1000px) { .landing { place-items: center start; padding-left: max(6vw, 32px); } }
+/* Landscape phones: two columns so the whole card fits without scrolling. */
+@media (max-height: 480px) and (orientation: landscape) {
+  .landing-card { width: min(700px, 100%); padding: 14px 18px 10px; }
+  .landing h1 { margin: 6px 0 10px; }
+  .landing-form { grid-template-columns: 1fr 1fr; column-gap: 18px; grid-template-areas: 'nl tl' 'ni tt' 'h h' 'g q'; align-items: start; }
+  .landing-form > label { grid-area: nl; }
+  .landing-form > input { grid-area: ni; }
+  .landing-form > .landing-label { grid-area: tl; }
+  .landing-form > .landing-teams { grid-area: tt; }
+  .landing-form > .landing-hint { grid-area: h; min-height: 0; }
+  .landing-form > .landing-go { grid-area: g; }
+  .landing-form > .landing-guest { grid-area: q; }
+  .landing-note { margin-top: 6px; }
+}

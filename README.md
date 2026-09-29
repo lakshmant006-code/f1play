@@ -13,6 +13,13 @@ npm run build    # static site in dist/
 
 ## What's in this build
 
+- **Landing**: each visit opens on the live circuit, turning slowly behind a
+  frosted card. Sign in with a player name and favourite team, or play as a
+  guest. Returning players get *Welcome back* with one-tap *Play*. The profile
+  is kept on this device (no server account), and a chip in the top bar shows
+  who's playing and signs out. On wide screens the card sits on the left and
+  the circuit is drawn shifted right beside it.
+
 Covers build-order steps 1 to 3 and most of 4 and 5 from the spec:
 
 - **World**: the circuit is split across four floating islands, joined by
