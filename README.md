@@ -95,6 +95,21 @@ Covers build-order steps 1 to 3 and most of 4 and 5 from the spec:
   the view, ⟳ Auto turns it like a turntable, and ⌂ resets it.
 - **Drive**: take Calder's #4 or Holm's #8 out yourself from the *Drive* button,
   a garage car's card, or the pit island's walking panel.
+  - **Two tracks**: the Drive menu (and the driver job in *Play as*) lets you
+    pick the track. Track 1 is the Sky Circuit. Track 2, **Caspian Dawn**, is
+    a street circuit inspired by Baku, at dawn (`/?track=dawn` drives it
+    straight away). It is a 1.65 km figure of eight on two floating islands:
+    the high cable-stayed bridge (9 m up) carries the track over the low arch
+    bridge, so the lap passes under itself in the channel between them. The
+    west island is the old city: a narrow climb along crenellated walls to a
+    horseshoe at the top, then down through a rock arch where a waterfall
+    pours across the road (spray, water on the lens, wet grip for a few
+    meters). The east island has the boulevard straight with palms, a
+    grandstand, flame towers and the DRS zone: detection and zone gantries
+    whose panels turn green, painted lines and letters, and LED strips on
+    the barrier tops (amber when DRS is available, a green chase when it is
+    open, with speed streaks on screen). Roads climb and fall, with gravity
+    along the slope, and each track keeps its own best lap.
   - **Cockpit view** like an F1 onboard shot: the halo and centre pillar, and a
     steering wheel that turns with the front wheels. Its screen shows gear,
     speed and lap time, with rev LEDs and buttons.

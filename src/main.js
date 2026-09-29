@@ -43,6 +43,13 @@ if (playRole && game.roles && ['driver', 'mechanic', 'engineer'].includes(playRo
   game.landing.hide?.();
   setTimeout(() => game.roles.play(playRole), 900);
 }
+// /?track=dawn drives Track 2 straight away.
+const trackParam = new URLSearchParams(location.search).get('track');
+if (trackParam === 'dawn' && !playRole) {
+  game.landing.hide?.();
+  game.trackChoice = 'dawn';
+  setTimeout(() => game.driveCar(game.teams.find((t) => t.launch), 'dawn'), 700);
+}
 initTopbar(game);
 initMenu();
 

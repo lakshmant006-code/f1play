@@ -39,16 +39,16 @@ function loadTc() {
   }
 }
 
-function loadBestLap() {
+function loadBestLap(key = BEST_KEY) {
   try {
-    return JSON.parse(localStorage.getItem(BEST_KEY) || 'null');
+    return JSON.parse(localStorage.getItem(key) || 'null');
   } catch {
     return null;
   }
 }
-function saveBestLap(v) {
+function saveBestLap(v, key = BEST_KEY) {
   try {
-    localStorage.setItem(BEST_KEY, JSON.stringify(v));
+    localStorage.setItem(key, JSON.stringify(v));
   } catch {
     /* storage unavailable */
   }
@@ -116,7 +116,10 @@ export class PlayerDrive {
 
   // ---- Start / stop ---------------------------------------------------------------
 
-  start(team) {
+  // circuit: where to drive (the Sky Circuit by default). It gives the path
+  // (with road heights), the road width and wall limits, grip, DRS zones and
+  // its own best lap, and may swap the scenery in (enter / exit / update).
+  start(team, circuit = this.game.homeCircuit) {
     const g = this.game;
     if (this.active) return;
     if (g.explorer?.active) g.explorer.exitQuiet();
@@ -127,11 +130,14 @@ export class PlayerDrive {
     this.saved = car.drive;
     this.active = true;
     this.mode = 'track';
+    this.circuit = circuit;
     // Place on the grid just behind the start line.
-    const tr = g.track;
+    const tr = circuit.track;
     const s0 = tr.length - 14;
     const p = tr.at(s0);
-    this.pos = V(p.pos.x, 0, p.pos.z);
+    this.pos = V(p.pos.x, p.pos.y, p.pos.z);
+    this.grade = 0;
+    this.lat = 0;
     this.heading = Math.atan2(p.tan.x, p.tan.z);
     this.v = 0;
     this.vy = 0;
@@ -148,7 +154,7 @@ export class PlayerDrive {
     this.lapStart = null;
     this.lapTime = 0;
     this.lastLap = null;
-    this.bestLap = loadBestLap();
+    this.bestLap = loadBestLap(circuit.bestKey);
     this.s = s0;
     this.armed = false;
     this.offTrack = 0;
@@ -177,10 +183,11 @@ export class PlayerDrive {
     g.ui.hideCard();
     g.ui.back.hidden = true;
     document.body.classList.add('walking', 'driving');
+    circuit.enter?.(this);
     this.setCam('cockpit');
     this.buildHud();
     g.audio?.start();
-    g.ui.toast(`<b>${d.data.name}'s car #${car.number}.</b> ${matchMedia('(pointer: coarse)').matches ? 'GAS to go, L / R to steer, DRIFT to slide, DRS on the straights.' : 'W or ↑ to go, A/D to steer, Shift to drift, Space for DRS, C for camera.'}`, { icon: '🏎', duration: 5000, accent: team.data.primary });
+    g.ui.toast(`<b>${d.data.name}'s car #${car.number}${circuit.name && circuit !== g.homeCircuit ? ` · ${circuit.name}` : ''}.</b> ${matchMedia('(pointer: coarse)').matches ? 'GAS to go, L / R to steer, DRIFT to slide, DRS on the straights.' : 'W or ↑ to go, A/D to steer, Shift to drift, Space for DRS, C for camera.'}`, { icon: '🏎', duration: 5000, accent: team.data.primary });
     this.place();
   }
 
@@ -189,6 +196,7 @@ export class PlayerDrive {
     const g = this.game;
     const car = this.car;
     this.active = false;
+    this.circuit?.exit?.();
     g.interactions.enabled = true;
     document.body.classList.remove('walking', 'driving');
     this.hud?.remove();
@@ -216,7 +224,9 @@ export class PlayerDrive {
     g.camera.near = 0.5;
     g.camera.updateProjectionMatrix();
     const fwd = V(Math.sin(this.heading), 0, Math.cos(this.heading));
-    g.rig.controls.target.copy(this.pos).addScaledVector(fwd, 10);
+    // Back from another circuit, the view starts from the home circuit's centre.
+    if (this.circuit === g.homeCircuit) g.rig.controls.target.copy(this.pos).addScaledVector(fwd, 10);
+    else g.rig.controls.target.set(0, 0, -5);
     g.rig.controls.enabled = true;
     g.rig.frozen = false;
     g.goHome();
@@ -345,12 +355,17 @@ export class PlayerDrive {
 
   toggleDrs() {
     // DRS only opens on straights at speed, and closes on braking or in corners.
-    const smp = this.game.track.at(this.s);
-    if (!this.drs && (Math.abs(smp.curv) > 0.02 || this.v < 18)) {
-      this.game.ui.toast('DRS is only available on the straights.', { icon: '🚫', duration: 1200 });
+    if (!this.drs && !this.drsAvailable()) {
+      this.game.ui.toast(this.circuit.drsZones ? 'DRS opens in the DRS zone, on the boulevard straight.' : 'DRS is only available on the straights.', { icon: '🚫', duration: 1200 });
       return;
     }
     this.drs = !this.drs;
+  }
+
+  drsAvailable() {
+    const smp = this.circuit.track.at(this.s);
+    if (Math.abs(smp.curv) > 0.02 || this.v < 18) return false;
+    return this.circuit.inDrs ? this.circuit.inDrs(this.s) : true;
   }
 
   // ---- Physics -----------------------------------------------------------------------
@@ -364,21 +379,30 @@ export class PlayerDrive {
     const brake = Math.max(k.has('s') || k.has('arrowdown') ? 1 : 0, this.touch.brake);
     const steerIn = (k.has('a') || k.has('arrowleft') ? 1 : 0) - (k.has('d') || k.has('arrowright') ? 1 : 0) + this.touch.steer;
 
-    // Where are we relative to the track?
-    const tr = g.track;
-    this.s = tr.nearest(this.pos);
+    // Where are we relative to the track? (Searched near the last spot, so
+    // where the lap crosses itself the car stays on its own level.)
+    const C = this.circuit;
+    const tr = C.track;
+    this.s = this.s === undefined ? tr.nearest(this.pos) : tr.nearestNear(this.pos, this.s);
     const smp = tr.at(this.s);
-    const n = V(smp.tan.z, 0, -smp.tan.x); // left normal
-    const rel = this.pos.clone().sub(smp.pos);
+    const flat = Math.hypot(smp.tan.x, smp.tan.z) || 1;
+    const n = V(smp.tan.z / flat, 0, -smp.tan.x / flat); // left normal
+    const rel = this.pos.clone().sub(smp.pos).setY(0);
     const lat = rel.dot(n);
-    const offTrack = Math.abs(lat) > TRACK_WIDTH / 2 + 0.5;
+    this.lat = lat;
+    const halfW = (C.width ? C.width(this.s) : TRACK_WIDTH) / 2;
+    const offTrack = Math.abs(lat) > halfW + 0.5;
+    // Road height and slope along the car's heading.
+    this.pos.y = smp.pos.y;
+    const fwdH = Math.sin(this.heading) * smp.tan.x + Math.cos(this.heading) * smp.tan.z;
+    this.grade = (smp.tan.y / flat) * Math.sign(fwdH || 1);
     const vmax = VMAX * (this.drs ? 1.12 : 1) * (offTrack ? 0.45 : 1);
 
     // Vehicle dynamics: a bicycle model with slip-angle tire forces, a
     // friction circle per axle, downforce, rear-wheel drive, brake balance
     // and a handbrake, stepped a few times per frame for stability.
     const handbrake = k.has('shift') || k.has('x') || this.touch.handbrake ? 1 : 0;
-    const mu = (offTrack ? 0.75 : 1.65) * (g.rain ? 0.72 : 1);
+    const mu = (offTrack ? 0.75 : 1.65) * (g.rain ? 0.72 : 1) * (C.grip ? C.grip(this.s) : 1);
     // Less steering lock at speed, like a real wheel you feed in gently.
     const vmaxSteer = deg(22) / (1 + Math.abs(this.v) / 14);
     this.steer += (steerIn * vmaxSteer - this.steer) * Math.min(1, dt * 5);
@@ -391,19 +415,19 @@ export class PlayerDrive {
     this.slip = slip;
     if (brake && this.drs) this.drs = false;
     if (this.drs && Math.abs(smp.curv) > 0.03) this.drs = false;
+    if (this.drs && C.inDrs && !C.inDrs(this.s)) this.drs = false; // the zone has ended
     // Tire smoke when the tires slide.
     if (slip > 0.14 && Math.abs(this.v) > 6 && !offTrack) {
       const back = V(Math.sin(this.heading), 0, Math.cos(this.heading)).multiplyScalar(-1.6);
       for (const sd of [-0.8, 0.8]) {
         const side = V(Math.cos(this.heading), 0, -Math.sin(this.heading)).multiplyScalar(sd);
-        g.particles.emit({ pos: this.pos.clone().add(back).add(side).setY(0.3), vel: V(0, 1.2, 0), color: ['#e9ecef', '#d6d9dd', '#ffffff'], life: 0.8, size: 0.32, gravity: 0.6, drag: 2.2, spread: 1.2, count: 1, jitter: 0.3 });
+        g.particles.emit({ pos: this.pos.clone().add(back).add(side).setY(this.pos.y + 0.3), vel: V(0, 1.2, 0), color: ['#e9ecef', '#d6d9dd', '#ffffff'], life: 0.8, size: 0.32, gravity: 0.6, drag: 2.2, spread: 1.2, count: 1, jitter: 0.3 });
       }
     }
 
-    // Walls: track-edge limit (tighter on bridges), and the pit wall.
-    const onIsland = g.onIsland(smp.pos.x + n.x * lat, smp.pos.z + n.z * lat);
-    const limit = onIsland ? TRACK_WIDTH / 2 + 4.8 : TRACK_WIDTH / 2 + 1.5;
-    const lat2 = this.pos.clone().sub(smp.pos).dot(n);
+    // Walls: the circuit's edge limit (on the Sky Circuit, tighter on bridges), and the pit wall.
+    const limit = C.limit(this.s, smp.pos.x + n.x * lat, smp.pos.z + n.z * lat);
+    const lat2 = this.pos.clone().sub(smp.pos).setY(0).dot(n);
     const pitWallZ = PIT_WALL_Z + 1.1;
     let hit = false;
     // World velocity, to tell a real impact from sliding along a wall.
@@ -415,7 +439,7 @@ export class PlayerDrive {
       this.pos.addScaledVector(n, (Math.sign(lat2) * limit - lat2));
       into = Math.max(into, velW.dot(n) * Math.sign(lat2));
     }
-    if (Math.abs(this.pos.x) < 50 && this.pos.z < pitWallZ && smp.pos.z > -40) {
+    if (C.pitWall && Math.abs(this.pos.x) < 50 && this.pos.z < pitWallZ && smp.pos.z > -40) {
       this.pos.z = pitWallZ;
       into = Math.max(into, -velW.z);
     }
@@ -435,8 +459,8 @@ export class PlayerDrive {
       this.r *= 0.3;
       this.drs = false;
     }
-    // Soft bumps with the other cars.
-    for (const t of g.teams) {
+    // Soft bumps with the other cars (only they share the Sky Circuit).
+    for (const t of C.bumps ? g.teams : []) {
       for (const c of t.cars) {
         if (c === this.car) continue;
         const d = c.root.position.distanceTo(this.pos);
@@ -472,6 +496,7 @@ export class PlayerDrive {
     this.place();
     this.animate(dt, offTrack);
     this.updateHud();
+    C.update?.(dt, this);
   }
 
   // One physics step. State: position, heading, forward speed v and sideways
@@ -479,6 +504,7 @@ export class PlayerDrive {
   // largest tire slip angle, used for smoke and the drift readout.
   integrate(h, { throttle, brake, handbrake, mu, offTrack }) {
     const tc = TC[this.tc ?? 2];
+    const grade = this.grade || 0;
     const m = 720;
     const Iz = 1050;
     const L = CAR.wheelbase;
@@ -542,7 +568,8 @@ export class PlayerDrive {
     const drag = (3.9 * (this.drs ? 0.8 : 1) * vx * Math.abs(vx)) + (offTrack ? 900 : 180) * Math.sign(vx);
     const cs = Math.cos(this.steer);
     const sn = Math.sin(this.steer);
-    const ax = (Fxr + Fxf * cs - Fyf * sn - drag) / m + this.vy * this.r;
+    // Hills: gravity along the slope (uphill slows, downhill pulls).
+    const ax = (Fxr + Fxf * cs - Fyf * sn - drag) / m + this.vy * this.r - G * (grade / Math.sqrt(1 + grade * grade)) * Math.sign(vx || 1) * (Math.abs(vx) > 0.3 || throttle ? 1 : 0);
     const ay = (Fyr + Fyf * cs + Fxf * sn) / m - vx * this.r;
     const rdot = (la * (Fyf * cs + Fxf * sn) - lb * Fyr) / Iz;
     this.v = THREE.MathUtils.clamp(vx + ax * h, -8, vmax * 1.05);
@@ -583,7 +610,7 @@ export class PlayerDrive {
     const isBest = !this.bestLap || t < this.bestLap.time;
     if (isBest) {
       this.bestLap = { time: t, number: this.car.number, date: new Date().toISOString() };
-      saveBestLap(this.bestLap);
+      saveBestLap(this.bestLap, this.circuit.bestKey);
     }
     g.ui.toast(`Lap ${t.toFixed(2)} s${isBest ? ' · new best!' : ''}`, { icon: '⏱', accent: this.team.data.primary, duration: 2500 });
   }
@@ -602,7 +629,8 @@ export class PlayerDrive {
   place() {
     const car = this.car;
     car.root.position.copy(this.pos);
-    car.root.rotation.set(0, this.heading, 0);
+    // Pitch with the road: nose up climbing, down descending.
+    car.root.rotation.set(-Math.atan(this.grade || 0), this.heading, 0, 'YXZ');
   }
 
   animate(dt, offTrack) {
@@ -667,8 +695,7 @@ export class PlayerDrive {
     const drifting = beta > deg(7) && Math.abs(this.v) > 6;
     this.driftEl.classList.toggle('on', drifting);
     if (drifting) this.driftEl.textContent = `DRIFT ${Math.round((beta * 180) / Math.PI)}°`;
-    const smp = this.game.track.at(this.s);
-    this.drsEl.classList.toggle('avail', !this.drs && Math.abs(smp.curv) < 0.02 && this.v > 18);
+    this.drsEl.classList.toggle('avail', !this.drs && this.drsAvailable());
     if (this.drsPad) {
       this.drsPad.classList.toggle('on', this.drs);
       this.drsPad.classList.toggle('avail', this.drsEl.classList.contains('avail'));

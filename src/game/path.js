@@ -57,6 +57,25 @@ export class Path {
     return out;
   }
 
+  // Nearest sample within `win` meters of a previous distance (keeps a car on
+  // its own level where the path crosses itself); falls back to a full search.
+  nearestNear(p, s, win = 40) {
+    const n = this.n;
+    const i0 = Math.round(this.index(s));
+    const k = Math.ceil(win / STEP);
+    let best = i0;
+    let bestD = Infinity;
+    for (let d = -k; d <= k; d++) {
+      const i = this.closed ? (((i0 + d) % n) + n) % n : Math.min(n, Math.max(0, i0 + d));
+      const dd = this.pos[i].distanceToSquared(p);
+      if (dd < bestD) {
+        bestD = dd;
+        best = i;
+      }
+    }
+    return bestD > 30 * 30 ? this.nearest(p) : best * STEP;
+  }
+
   // Distance along the path of the sample nearest to a point.
   nearest(p) {
     let best = 0;

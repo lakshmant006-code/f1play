@@ -472,7 +472,7 @@ function ribbon(path, halfWidth, y, { from = 0, to = path.length, step = 1, offs
   return g;
 }
 
-function asphaltTexture() {
+export function asphaltTexture() {
   const c = document.createElement('canvas');
   c.width = c.height = 256;
   const ctx = c.getContext('2d');

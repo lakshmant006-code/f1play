@@ -94,7 +94,7 @@ export function buildIslandShapes(track, pit, extras) {
 }
 
 // Marching squares on a binary grid; returns the longest loop, smoothed.
-function contour(W, H, inside, x0, z0, cell) {
+export function contour(W, H, inside, x0, z0, cell) {
   const segs = new Map();
   const key = (a) => `${a[0]},${a[1]}`;
   const link = (a, b) => {

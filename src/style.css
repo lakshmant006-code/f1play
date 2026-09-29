@@ -485,3 +485,36 @@ body.driving .actions-top, body.driving .menu-btn, body.driving .profile-chip, b
   .avatar-btn .lbl { order: 1; }
   .avatar-btn .badge { order: 2; }
 }
+
+/* Track picker (drive menu). */
+.track-pick { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 4px 0 6px; }
+.track-card { display: grid; grid-template-rows: auto auto 1fr; gap: 4px; text-align: left; padding: 8px 8px 10px; border-radius: 14px; align-content: start; }
+.track-card .track-swatch { display: block; height: 46px; border-radius: 10px; }
+.track-card b { font-size: 15px; }
+.track-card span:last-child { font-weight: 600; font-size: 12px; line-height: 1.35; color: var(--ink-2); }
+.track-card[aria-checked='true'] { outline: 3px solid var(--ink); outline-offset: 0; }
+@media (max-width: 480px) { .track-pick { grid-template-columns: 1fr; } .track-card .track-swatch { height: 28px; } }
+
+/* Water on the lens after driving through the waterfall. */
+.splash-fx { position: fixed; inset: 0; pointer-events: none; z-index: 1; animation: splash-fade 3s ease-out forwards; }
+.splash-fx i {
+  position: absolute; border-radius: 50%; translate: -50% -50%;
+  background: radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.85), rgba(210, 235, 250, 0.35) 35%, rgba(160, 200, 225, 0.12) 60%, transparent 72%);
+  box-shadow: inset -2px -3px 6px rgba(20, 40, 60, 0.18); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
+  animation: drip 3s ease-in forwards;
+}
+@keyframes splash-fade { 0% { background: rgba(225, 240, 250, 0.55); } 18% { background: rgba(225, 240, 250, 0.08); } 100% { background: transparent; opacity: 0; } }
+@keyframes drip { 0% { transform: scale(0.6); opacity: 0; } 8% { transform: scale(1); opacity: 1; } 100% { transform: translateY(70px) scale(0.9); opacity: 0; } }
+
+/* DRS open: speed streaks at the frame edges. */
+body.drs-open #ui::before {
+  content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  background: repeating-conic-gradient(from 0deg at 50% 45%, rgba(255, 255, 255, 0.16) 0deg 0.6deg, transparent 0.6deg 7deg);
+  -webkit-mask: radial-gradient(ellipse 58% 52% at 50% 45%, transparent 55%, #000 100%); mask: radial-gradient(ellipse 58% 52% at 50% 45%, transparent 55%, #000 100%);
+  animation: streaks 0.35s linear infinite;
+}
+@keyframes streaks { from { transform: rotate(0deg); } to { transform: rotate(7deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .splash-fx, .splash-fx i, body.drs-open #ui::before { animation: none; }
+  .splash-fx { display: none; }
+}
