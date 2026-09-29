@@ -69,6 +69,18 @@ Covers build-order steps 1 to 3 and most of 4 and 5 from the spec:
   grade and best show right in the pad, with one-tap *Go again*, *Share*
   (a result card with a holo border under 2.4 s) and *Done*. Best time is
   saved locally.
+- **Play as**: your own character from the creator takes a job in the team,
+  each in first person (🎮 *Play as*, or the links after saving a character):
+  - **Driver**: drive from the cockpit; you are the one in the seat in the
+    T-cam and chase views.
+  - **Mechanic**: pit stops only. You are the front-left wheel gunner, crouched
+    at the wheel with the gun in your gloves: gun off when the car stops,
+    tighten when the new tyre is on (too early is a fumble). The crew does the
+    other three corners.
+  - **Race engineer**: radio only, from your team's pit wall seat. Call the
+    pace (push, balanced, save tyres), box for softs, mediums, hards or inters,
+    and react to rain and the driver's reports. Tyres wear with the pace and
+    suit the weather or not; the view follows the car or you can look around.
 - **Menu**: on phones and narrow windows the top bar is just the brand, the
   player chip and a ☰ button that opens every game action in a frosted
   dropdown (it closes on a pick, a tap outside or Escape). The camera buttons
@@ -86,7 +98,11 @@ Covers build-order steps 1 to 3 and most of 4 and 5 from the spec:
     tires and a friction circle per axle, downforce, rear-wheel drive with
     traction control, front/rear brake balance and a handbrake (Shift or X).
     The car slides, drifts, understeers on the brakes and needs countersteer;
-    grass and rain cut grip. Tire smoke and a drift-angle readout show the
+    grass and rain cut grip. Traction control has three levels (T key or the
+    TC button; High by default, saved on this device): High caps rear drive
+    when turning, cuts power as the rear starts to slide and steadies the
+    yaw, Low does less, Off lets the rear step out. The handbrake still
+    drifts on every level, and the wheel screen shows TC, lit while it works. Tire smoke and a drift-angle readout show the
     slide. DRS on the straights (Space). Walls sit at the track edge and
     tighter barriers on the bridges; sliding along a wall doesn't stop you.
   - **Lap timing** with a best lap saved on this device.

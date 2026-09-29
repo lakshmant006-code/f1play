@@ -126,7 +126,7 @@ export function islandMaterials() {
   islandMats = {
     grass: new THREE.MeshStandardMaterial({ map: grassTexture(), roughness: 0.97 }),
     soil: new THREE.MeshStandardMaterial({ color: SCENERY.soil, roughness: 1 }),
-    rock: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.93, bumpMap: rockBumpTexture(), bumpScale: 2.2 }),
+    rock: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.93, bumpMap: rockBumpTexture(), bumpScale: 2.2, side: THREE.DoubleSide }),
   };
   return islandMats;
 }
@@ -181,75 +181,189 @@ export function buildIsland(rawOutline, { depth = 30, seed = 1, grassH = 1.2 } =
   grass.receiveShadow = true;
   g.add(grass);
 
-  // Rock grid: rings from the rim down, columns around the outline.
-  const c = outline.reduce((a, p) => a.add(p), new THREE.Vector2()).multiplyScalar(1 / outline.length);
+  // Solid rock underside, in two parts that together cover the whole
+  // footprint: a craggy cliff band hanging from the rim, then a belly surface
+  // over a grid of the footprint, deepest far from the edge. Grid points
+  // outside the outline are pulled onto it, so the belly meets the cliff all
+  // the way round, whatever the island's shape.
   const n = outline.length;
-  const R = 30;
   const sd = seed * 17.3;
-  // Hanging lobes: a few angular bumps that push the underside deeper.
-  const lobes = Array.from({ length: 4 + Math.floor(rand() * 3) }, () => ({ a: rand() * Math.PI * 2, w: 0.35 + rand() * 0.5, d: 0.25 + rand() * 0.55 }));
-  const lobe = (ang) => lobes.reduce((m, l) => Math.max(m, l.d * Math.exp(-Math.pow(Math.atan2(Math.sin(ang - l.a), Math.cos(ang - l.a)) / l.w, 2))), 0);
   const top0 = -grassH - 0.3;
-  const pos = new Float32Array((R + 1) * n * 3 + 3);
-  const uv = new Float32Array((R + 1) * n * 2 + 2);
-  const shade = new Float32Array((R + 1) * n + 1);
+  const cliffH = Math.max(3, depth * 0.1);
   let perim = 0;
   const along = [0];
   for (let i = 1; i <= n; i++) along.push((perim += outline[i - 1].distanceTo(outline[i % n])));
-  for (let k = 0; k <= R; k++) {
-    const t = k / R;
+  const c = outline.reduce((acc, p) => acc.add(p), new THREE.Vector2()).multiplyScalar(1 / n);
+
+  // Nearest point on the outline, and whether (x, z) is inside it.
+  const nearest = (x, z) => {
+    let best = Infinity;
+    let bx = 0;
+    let bz = 0;
+    let inside = false;
+    for (let i = 0; i < n; i++) {
+      const a = outline[i];
+      const b2 = outline[(i + 1) % n];
+      if (a.y > z !== b2.y > z && x < ((b2.x - a.x) * (z - a.y)) / (b2.y - a.y) + a.x) inside = !inside;
+      const ex = b2.x - a.x;
+      const ez = b2.y - a.y;
+      const t = Math.max(0, Math.min(1, ((x - a.x) * ex + (z - a.y) * ez) / (ex * ex + ez * ez || 1)));
+      const px = a.x + ex * t;
+      const pz = a.y + ez * t;
+      const d2 = (x - px) * (x - px) + (z - pz) * (z - pz);
+      if (d2 < best) {
+        best = d2;
+        bx = px;
+        bz = pz;
+      }
+    }
+    return { d: Math.sqrt(best), x: bx, z: bz, inside };
+  };
+
+  const P = [];
+  const UV = [];
+  const shadeArr = [];
+  const idx = [];
+  const push = (x, y, z, u, v, sh) => {
+    P.push(x, y, z);
+    UV.push(u, v);
+    shadeArr.push(sh);
+    return P.length / 3 - 1;
+  };
+
+  // 1) Cliff band: rings of the outline from the grass lip down, bulging out
+  //    a little with noise, so the edge reads as a thick rock wall.
+  const BAND = 6;
+  const bandIdx = [];
+  for (let k = 0; k <= BAND; k++) {
+    const t = k / BAND;
+    const ring = [];
     for (let i = 0; i < n; i++) {
       const p = outline[i];
-      const dx = p.x - c.x;
-      const dz = p.y - c.y;
-      const ang = Math.atan2(dz, dx);
-      const L = lobe(ang);
-      // Profile: short near-vertical cliff, a slight bulge, then a long taper.
-      const cliff = Math.min(1, t / 0.08);
-      const taper = t < 0.08 ? 1 : Math.max(0.02, Math.pow(1 - (t - 0.08) / 0.92, 0.9 + (1 - L) * 0.5));
-      let s = (t < 0.08 ? 1 - cliff * 0.05 : 0.95 * taper) * (1 + 0.05 * Math.sin(t * Math.PI));
-      const colDepth = depth * (0.62 + L * 0.75 + fbm(Math.cos(ang) * 1.3 + sd, Math.sin(ang) * 1.3, 0.5) * 0.18);
-      let y = top0 - (t < 0.08 ? cliff * depth * 0.07 : depth * 0.07 + (colDepth - depth * 0.07) * Math.pow((t - 0.08) / 0.92, 1.05));
-      // Crags: fractal noise pushes the surface in and out; strata make ledges.
-      const wx = c.x + dx * s;
-      const wz = c.y + dz * s;
-      const nz = fbm(wx * 0.07 + sd, y * 0.09, wz * 0.07, 5);
-      const strata = Math.pow(Math.abs(Math.sin(y * 0.55 + fbm(wx * 0.03, 0, wz * 0.03) * 2)), 6) * 0.06;
-      const crag = k === 0 ? 0 : nz * 0.16 * Math.min(1, t * 6) - strata * Math.min(1, t * 6);
-      s *= 1 + crag;
-      if (k > 0) y += fbm(wx * 0.05, sd, wz * 0.05, 3) * depth * 0.05 * t;
-      const j = k * n + i;
-      pos[j * 3] = c.x + dx * s;
-      pos[j * 3 + 1] = y;
-      pos[j * 3 + 2] = c.y + dz * s;
-      uv[j * 2] = along[i] / 9;
-      uv[j * 2 + 1] = -y / 9;
-      shade[j] = crag;
+      const q = outline[(i + 1) % n];
+      const r = outline[(i - 1 + n) % n];
+      // Outward normal from the neighbours (the outline winds either way, so
+      // point it away from the inside).
+      let nx = q.y - r.y;
+      let nz = -(q.x - r.x);
+      const len = Math.hypot(nx, nz) || 1;
+      nx /= len;
+      nz /= len;
+      if (nearest(p.x + nx * 0.8, p.y + nz * 0.8).inside) {
+        nx = -nx;
+        nz = -nz;
+      }
+      const y = top0 - t * cliffH;
+      const nz3 = fbm(p.x * 0.08 + sd, y * 0.12, p.y * 0.08, 4);
+      const bulge = (Math.sin(t * Math.PI) * 0.9 + nz3 * 1.6) * (k === 0 ? 0 : 1) - t * t * 1.2;
+      ring.push(push(p.x + nx * bulge, y, p.y + nz * bulge, along[i] / 9, -y / 9, nz3 * 0.5));
     }
+    bandIdx.push(ring);
   }
-  // Tip.
-  const tipIdx = (R + 1) * n;
-  pos[tipIdx * 3] = c.x;
-  pos[tipIdx * 3 + 1] = top0 - depth * 1.15;
-  pos[tipIdx * 3 + 2] = c.y;
-  const idx = [];
-  for (let k = 0; k < R; k++) {
+  for (let k = 0; k < BAND; k++) {
     for (let i = 0; i < n; i++) {
-      const a = k * n + i;
-      const b = k * n + ((i + 1) % n);
-      const cc = (k + 1) * n + i;
-      const d = (k + 1) * n + ((i + 1) % n);
-      idx.push(a, b, cc, b, d, cc);
+      const a = bandIdx[k][i];
+      const b2 = bandIdx[k][(i + 1) % n];
+      const cc = bandIdx[k + 1][i];
+      const d = bandIdx[k + 1][(i + 1) % n];
+      idx.push(a, b2, cc, b2, d, cc);
     }
   }
-  for (let i = 0; i < n; i++) idx.push(R * n + i, R * n + ((i + 1) % n), tipIdx);
+
+  // 2) Belly: a grid over the footprint. Depth grows with distance from the
+  //    rim, with broad hanging lobes and fine crags from noise.
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minZ = Infinity;
+  let maxZ = -Infinity;
+  for (const p of outline) {
+    minX = Math.min(minX, p.x);
+    maxX = Math.max(maxX, p.x);
+    minZ = Math.min(minZ, p.y);
+    maxZ = Math.max(maxZ, p.y);
+  }
+  const CELL = Math.max(1.6, Math.sqrt(((maxX - minX) * (maxZ - minZ)) / 3500));
+  const GX = Math.ceil((maxX - minX) / CELL) + 3;
+  const GZ = Math.ceil((maxZ - minZ) / CELL) + 3;
+  const x0 = minX - CELL;
+  const z0 = minZ - CELL;
+  const info = [];
+  let dMax = 1;
+  for (let j = 0; j < GZ; j++) {
+    for (let i = 0; i < GX; i++) {
+      const x = x0 + i * CELL;
+      const z = z0 + j * CELL;
+      const nr = nearest(x, z);
+      info.push({ x, z, d: nr.d, inside: nr.inside, nx: nr.x, nz: nr.z });
+      if (nr.inside) dMax = Math.max(dMax, nr.d);
+    }
+  }
+  const bottom0 = top0 - cliffH + 0.6; // overlaps the cliff band so no seam shows
+  const grid = new Int32Array(GX * GZ).fill(-1);
+  const deep = (x, z, d) => {
+    const f = Math.min(1, d / dMax);
+    const lobes = 0.55 + 0.9 * Math.max(0, fbm(x * 0.022 + sd, 0.3, z * 0.022, 3) + 0.35);
+    const fall = Math.pow(f, 0.7) * (0.35 + 0.65 * Math.min(1, d / 12));
+    return (depth * 1.05 - cliffH) * fall * lobes;
+  };
+  const used = new Uint8Array(GX * GZ);
+  const deepIdx = []; // inner belly points, for hanging spurs
+  for (let j = 0; j < GZ - 1; j++) {
+    for (let i = 0; i < GX - 1; i++) {
+      const q = [j * GX + i, j * GX + i + 1, (j + 1) * GX + i, (j + 1) * GX + i + 1];
+      if (q.some((k) => info[k].inside)) q.forEach((k) => (used[k] = 1));
+    }
+  }
+  for (let k = 0; k < info.length; k++) {
+    if (!used[k]) continue;
+    const g0 = info[k];
+    let x = g0.x;
+    let z = g0.z;
+    let y = bottom0;
+    let sh = 0;
+    if (g0.inside) {
+      // Jitter interior points a little so the grid never shows.
+      const jx = fbm(x * 0.3 + sd, 1.7, z * 0.3, 2) * CELL * 0.35;
+      const jz = fbm(x * 0.3, 4.1 + sd, z * 0.3, 2) * CELL * 0.35;
+      if (g0.d > CELL) {
+        x += jx;
+        z += jz;
+      }
+      const d = nearest(x, z).d;
+      const crag = fbm(x * 0.09 + sd, 0.5, z * 0.09, 5);
+      const strata = Math.pow(Math.abs(Math.sin(d * 0.45 + crag * 2)), 6);
+      y = bottom0 - deep(x, z, d) * (1 + crag * 0.22) - strata * Math.min(1, d / 6) * 0.8;
+      sh = crag * 0.8 - strata * 0.25;
+    } else {
+      // Outside the outline: pull onto it, at the cliff foot.
+      x = g0.nx;
+      z = g0.nz;
+    }
+    grid[k] = push(x, y, z, x / 9, z / 9, sh);
+    if (g0.inside && g0.d > 5) deepIdx.push(grid[k]);
+  }
+  for (let j = 0; j < GZ - 1; j++) {
+    for (let i = 0; i < GX - 1; i++) {
+      const a = grid[j * GX + i];
+      const b2 = grid[j * GX + i + 1];
+      const cc = grid[(j + 1) * GX + i];
+      const d = grid[(j + 1) * GX + i + 1];
+      if (a < 0 || b2 < 0 || cc < 0 || d < 0) continue;
+      if (!(info[j * GX + i].inside || info[j * GX + i + 1].inside || info[(j + 1) * GX + i].inside || info[(j + 1) * GX + i + 1].inside)) continue;
+      // Facing down: wind so normals point away from the island.
+      idx.push(a, b2, cc, b2, d, cc);
+    }
+  }
+
+  const pos = new Float32Array(P);
+  const uv = new Float32Array(UV);
+  const shade = new Float32Array(shadeArr);
+  const tipIdx = pos.length / 3 - 1;
   const rock = new THREE.BufferGeometry();
   rock.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   rock.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
   rock.setIndex(idx);
   rock.computeVertexNormals();
-  // Where rings converge toward the tip, triangles collapse; give those
-  // vertices a straight-down normal instead of NaN.
   const nrm = rock.attributes.normal;
   for (let j = 0; j < nrm.count; j++) {
     const x = nrm.getX(j), y = nrm.getY(j), z = nrm.getZ(j);
@@ -281,14 +395,12 @@ export function buildIsland(rawOutline, { depth = 30, seed = 1, grassH = 1.2 } =
 
   // Spurs: smaller hanging rock spikes around the underside, and loose boulders.
   const spurs = [];
-  const nSpurs = 5 + Math.floor(perim / 60);
+  const nSpurs = deepIdx.length ? 6 + Math.floor(perim / 50) : 0;
   for (let q = 0; q < nSpurs; q++) {
-    const i = Math.floor(rand() * n);
-    const k = Math.floor(R * (0.25 + rand() * 0.45));
-    const j = k * n + i;
+    const j = deepIdx[Math.floor(rand() * deepIdx.length)];
     const px = pos[j * 3], py = pos[j * 3 + 1], pz = pos[j * 3 + 2];
-    const len = depth * (0.12 + rand() * 0.22);
-    const rad = len * (0.18 + rand() * 0.1);
+    const len = depth * (0.12 + rand() * 0.25);
+    const rad = len * (0.2 + rand() * 0.12);
     const cone = new THREE.ConeGeometry(rad, len, 9, 6);
     const cp = cone.attributes.position;
     for (let v = 0; v < cp.count; v++) {
@@ -297,7 +409,7 @@ export function buildIsland(rawOutline, { depth = 30, seed = 1, grassH = 1.2 } =
       cp.setZ(v, cp.getZ(v) * f);
     }
     cone.rotateX(Math.PI);
-    cone.translate(px + (c.x - px) * 0.08, py - len / 2 + rad * 0.6, pz + (c.y - pz) * 0.08);
+    cone.translate(px, py - len / 2 + len * 0.3, pz); // top third buried in the rock
     spurs.push(tint(cone, rand() < 0.5 ? SCENERY.cliff : '#5A4131'));
   }
   const boulders = [];

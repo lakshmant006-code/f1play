@@ -281,7 +281,7 @@ function tablet(r) {
   return g;
 }
 
-function wheelgun(r) {
+export function wheelgun(r) {
   const g = new THREE.Group();
   const white = solid('#F2F2F0', { roughness: 0.4 });
   const team = solid(r.primary, { roughness: 0.4 });

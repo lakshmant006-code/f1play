@@ -36,6 +36,12 @@ await Promise.race([document.fonts?.load('900 40px Nunito').catch(() => {}), new
 const game = new Game({ renderer, scene, camera, post, rig, ui });
 window.skyCircuit = game; // handy for debugging in the console
 game.landing = initLanding(game);
+// Links like /?play=mechanic (from the creator) jump straight into a job.
+const playRole = new URLSearchParams(location.search).get('play');
+if (playRole && game.roles && ['driver', 'mechanic', 'engineer'].includes(playRole)) {
+  game.landing.hide?.();
+  setTimeout(() => game.roles.play(playRole), 900);
+}
 initMenu();
 
 function resize() {
