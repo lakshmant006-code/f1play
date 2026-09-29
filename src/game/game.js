@@ -96,7 +96,7 @@ export class Game {
     const extras = [
       { shape: 'rect', x0: -44, x1: 44, z0: GARAGE_FRONT_Z - GARAGE_DEPTH - 6, z1: -40, island: 0 },
       ...pitLaneExtras,
-      { shape: 'rect', x0: L.grandstand.x - L.grandstand.len / 2 - 3, x1: L.grandstand.x + L.grandstand.len / 2 + 9, z0: L.grandstand.z - 15, z1: L.grandstand.z + 5, island: 1 },
+      { shape: 'rect', x0: L.grandstand.x - L.grandstand.len / 2 - 9, x1: L.grandstand.x + L.grandstand.len / 2 + 9, z0: L.grandstand.z - 15, z1: L.grandstand.z + 5, island: 1 },
       { shape: 'circle', x: L.tower.x, z: L.tower.z, r: 13, island: 2 },
       { shape: 'rect', x0: L.podium.x - 14, x1: -67, z0: L.podium.z - 15, z1: L.podium.z + 15, island: 3 },
     ];
