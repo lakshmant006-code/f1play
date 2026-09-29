@@ -4,6 +4,8 @@ import { createPost } from './fx/post.js';
 import { CameraRig } from './camera.js';
 import { UI } from './ui/ui.js';
 import { Game } from './game/game.js';
+import { initLanding } from './landing.js';
+import { initMenu } from './ui/menu.js';
 import { SCENERY } from './data.js';
 
 const canvas = document.getElementById('scene');
@@ -33,6 +35,8 @@ await Promise.race([document.fonts?.load('900 40px Nunito').catch(() => {}), new
 
 const game = new Game({ renderer, scene, camera, post, rig, ui });
 window.skyCircuit = game; // handy for debugging in the console
+game.landing = initLanding(game);
+initMenu();
 
 function resize() {
   const w = window.innerWidth;
