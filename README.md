@@ -86,7 +86,11 @@ Covers build-order steps 1 to 3 and most of 4 and 5 from the spec:
     tires and a friction circle per axle, downforce, rear-wheel drive with
     traction control, front/rear brake balance and a handbrake (Shift or X).
     The car slides, drifts, understeers on the brakes and needs countersteer;
-    grass and rain cut grip. Tire smoke and a drift-angle readout show the
+    grass and rain cut grip. Traction control has three levels (T key or the
+    TC button; High by default, saved on this device): High caps rear drive
+    when turning, cuts power as the rear starts to slide and steadies the
+    yaw, Low does less, Off lets the rear step out. The handbrake still
+    drifts on every level, and the wheel screen shows TC, lit while it works. Tire smoke and a drift-angle readout show the
     slide. DRS on the straights (Space). Walls sit at the track edge and
     tighter barriers on the bridges; sliding along a wall doesn't stop you.
   - **Lap timing** with a best lap saved on this device.

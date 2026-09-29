@@ -150,7 +150,7 @@ button.accent { background: #F5C518; border-color: #E0B000; }
 .joy { position: absolute; right: 24px; bottom: 150px; width: 120px; height: 120px; border-radius: 50%; background: rgba(14, 27, 43, 0.25); border: 2px solid rgba(255, 255, 255, 0.7); touch-action: none; display: grid; place-items: center; }
 .joy-knob { width: 52px; height: 52px; border-radius: 50%; background: rgba(255, 255, 255, 0.9); box-shadow: var(--shadow); pointer-events: none; }
 body.walking .view-ctl { display: none; }
-body.driving .actions-top, body.driving .menu-btn { display: none; }
+body.driving .actions-top, body.driving .menu-btn, body.driving .profile-chip { display: none; }
 
 /* Drive HUD: a steering-wheel style display at the bottom centre. */
 .drive-hud {
@@ -158,7 +158,7 @@ body.driving .actions-top, body.driving .menu-btn { display: none; }
   background: rgba(8, 11, 16, 0.88); color: #F4F5F7; border-radius: 22px 22px 16px 16px; padding: 10px 16px 10px;
   box-shadow: var(--shadow); min-width: min(460px, calc(100vw - 32px)); font-variant-numeric: tabular-nums;
 }
-.drive-hud.compact { left: auto; right: 16px; transform: none; min-width: 0; width: 300px; padding: 8px 12px; }
+.drive-hud.compact { left: auto; right: 16px; transform: none; min-width: 0; width: 360px; padding: 8px 12px; }
 .drive-hud.compact .d-rev i { width: 10px; height: 10px; }
 .drive-hud.compact .d-gear { font-size: 34px; }
 .drive-hud.compact .d-speed { font-size: 26px; }
@@ -367,3 +367,5 @@ body.landing-on .topbar, body.landing-on .view-ctl, body.landing-on .card, body.
 }
 .menu-label { display: none; }
 @media (max-width: 1000px) { .menu-label { display: inline; } }
+/* Traction control button: flashes amber while TC is cutting power or catching a slide. */
+.drive-hud .tc-btn.active { background: #F5C518; color: #0e1b2b; border-color: #F5C518; }

@@ -20,6 +20,24 @@ const BEST_KEY = 'skycircuit.bestLap';
 const VMAX = 46; // m/s, toy scale (~165 km/h)
 const GEARS = 8;
 const CAMS = ['cockpit', 'tcam', 'chase'];
+const TC_KEY = 'skycircuit.tc';
+// Traction control levels. cap: most rear drive force as a share of rear grip;
+// slip / cut: rear slip angle where power starts to be cut, and how much;
+// yaw / damp: stability assist pulling the yaw rate toward what the steering
+// asks for and bleeding off sideways sliding.
+const TC = [
+  { name: 'Off', cap: 0.95, slip: Infinity, cut: 0, yaw: 0, damp: 0 },
+  { name: 'Low', cap: 0.8, slip: 0.3, cut: 0.85, yaw: 1.2, damp: 0.4 },
+  { name: 'High', cap: 0.6, slip: 0.12, cut: 0.95, yaw: 4, damp: 1.6 },
+];
+function loadTc() {
+  try {
+    const v = Number(localStorage.getItem(TC_KEY));
+    return Number.isInteger(v) && v >= 0 && v < TC.length && localStorage.getItem(TC_KEY) !== null ? v : 2;
+  } catch {
+    return 2;
+  }
+}
 
 function loadBestLap() {
   try {
@@ -121,6 +139,8 @@ export class PlayerDrive {
     this.slip = 0;
     this.steer = 0;
     this.drs = false;
+    this.tc = loadTc();
+    this.tcActive = 0;
     this.flap = 0;
     this.pitch = 0;
     this.roll = 0;
@@ -230,13 +250,14 @@ export class PlayerDrive {
     this.driftEl = h('div', { class: 'd-drift', 'aria-live': 'off' }, 'DRIFT');
     this.revEl = h('div', { class: 'd-rev' }, Array.from({ length: 15 }, () => h('i')));
     this.camBtn = h('button', { onclick: () => this.setCam(CAMS[(CAMS.indexOf(this.cam) + 1) % CAMS.length]) }, 'Camera: Cockpit');
+    this.tcBtn = h('button', { class: 'tc-btn', title: 'Traction control (T)', onclick: () => this.cycleTc() }, `TC: ${TC[this.tc].name}`);
     this.hud = h(
       'div',
       { class: 'drive-hud', role: 'region', 'aria-label': 'Driving' },
       this.revEl,
       h('div', { class: 'd-row' }, h('div', { class: 'd-col' }, this.gearEl, h('div', { class: 'd-label' }, 'GEAR')), h('div', { class: 'd-col' }, this.speedEl, h('div', { class: 'd-label' }, 'KM/H')), h('div', { class: 'd-col' }, this.lapEl, this.lastEl, this.bestEl), this.drsEl, this.driftEl),
-      h('div', { class: 'd-help' }, matchMedia('(pointer: coarse)').matches ? 'Pedals right · steer left · Drift = handbrake' : 'W/↑ go · S/↓ brake · A/D steer · Shift/X handbrake · Space DRS · C camera · Esc leave'),
-      h('div', { class: 'd-actions' }, this.camBtn, h('button', { class: 'primary', onclick: () => this.stop() }, 'Leave car'))
+      h('div', { class: 'd-help' }, matchMedia('(pointer: coarse)').matches ? 'Pedals right · steer left · Drift = handbrake' : 'W/↑ go · S/↓ brake · A/D steer · Shift/X handbrake · T traction control · Space DRS · C camera · Esc leave'),
+      h('div', { class: 'd-actions' }, this.tcBtn, this.camBtn, h('button', { class: 'primary', onclick: () => this.stop() }, 'Leave car'))
     );
     g.ui.root.append(this.hud);
     this.hud.classList.toggle('compact', this.cam === 'cockpit');
@@ -302,11 +323,23 @@ export class PlayerDrive {
       if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(k)) e.preventDefault();
       if (k === ' ' && !e.repeat) this.toggleDrs();
       else if (k === 'c' && !e.repeat) this.setCam(CAMS[(CAMS.indexOf(this.cam) + 1) % CAMS.length]);
+      else if (k === 't' && !e.repeat) this.cycleTc();
       else if (k === 'escape') this.stop();
       else this.keys.add(k);
     });
     window.addEventListener('keyup', (e) => this.keys.delete(e.key.toLowerCase()));
     window.addEventListener('blur', () => this.keys.clear());
+  }
+
+  cycleTc() {
+    this.tc = (this.tc + TC.length - 1) % TC.length; // High -> Low -> Off -> High
+    try {
+      localStorage.setItem(TC_KEY, String(this.tc));
+    } catch {
+      /* storage unavailable */
+    }
+    if (this.tcBtn) this.tcBtn.textContent = `TC: ${TC[this.tc].name}`;
+    this.game.ui.toast(`Traction control: <b>${TC[this.tc].name}</b>${this.tc === 0 ? ' · the rear will step out' : ''}`, { icon: '🛞', duration: 1400 });
   }
 
   toggleDrs() {
@@ -353,6 +386,7 @@ export class PlayerDrive {
     let slip = 0;
     for (let i = 0; i < steps; i++) slip = Math.max(slip, this.integrate(hs, { throttle, brake, handbrake, mu, offTrack }));
     const yawRate = this.r;
+    this.tcActive = Math.max(0, (this.tcActive || 0) - dt);
     this.slip = slip;
     if (brake && this.drs) this.drs = false;
     if (this.drs && Math.abs(smp.curv) > 0.03) this.drs = false;
@@ -443,6 +477,7 @@ export class PlayerDrive {
   // speed vy (car frame, vy > 0 to the car's left), yaw rate r. Returns the
   // largest tire slip angle, used for smoke and the drift readout.
   integrate(h, { throttle, brake, handbrake, mu, offTrack }) {
+    const tc = TC[this.tc ?? 2];
     const m = 720;
     const Iz = 1050;
     const L = CAR.wheelbase;
@@ -465,7 +500,14 @@ export class PlayerDrive {
       else {
         const P = 400000 * (this.drs ? 1.05 : 1);
         Fxr = Math.min(9500, P / Math.max(speed, 1)) * Math.max(0, 1 - Math.pow(Math.max(0, vx) / vmax, 6));
-        Fxr = Math.min(Fxr, 0.8 * fmaxR); // traction control
+        // Traction control: no more drive than the rear can hold. With the
+        // wheels straight it lets nearly full grip through; turning, it holds
+        // more back so the rear keeps enough grip to go round.
+        const straight = 1 - Math.min(1, Math.abs(this.steer) / 0.12);
+        const cap = tc.cap + (Math.max(tc.cap, 0.9) - tc.cap) * straight;
+        const capped = Math.min(Fxr, cap * fmaxR);
+        if (capped < Fxr) this.tcActive = 0.25;
+        Fxr = capped;
       }
     }
     if (brake) {
@@ -477,7 +519,11 @@ export class PlayerDrive {
     }
     // Traction control also backs off power while the rear is sliding (not on the handbrake).
     const arNow = speed > 2 ? Math.atan2(this.vy - lb * this.r, speed) : 0;
-    if (Fxr > 0 && !handbrake) Fxr *= 1 - THREE.MathUtils.clamp(Math.abs(arNow) / 0.3, 0, 0.85);
+    if (Fxr > 0 && !handbrake && Math.abs(arNow) > tc.slip * 0.4) {
+      const cut = THREE.MathUtils.clamp((Math.abs(arNow) - tc.slip * 0.4) / tc.slip, 0, tc.cut);
+      if (cut > 0.05) this.tcActive = 0.25;
+      Fxr *= 1 - cut;
+    }
     if (handbrake && speed > 0.5) Fxr = -Math.sign(vx) * 0.45 * fmaxR;
     // Lateral forces from slip angles, capped by what the friction circle leaves.
     let Fyf = 0;
@@ -502,6 +548,19 @@ export class PlayerDrive {
     if (speed > 2) {
       this.vy += ay * h;
       this.r += rdot * h;
+      // Stability assist (not while on the handbrake, so drifts still work):
+      // steer the yaw rate toward what the wheels ask for, within grip, and
+      // damp sideways sliding.
+      if (!handbrake && tc.yaw) {
+        const rRef = THREE.MathUtils.clamp((vx * Math.tan(this.steer)) / L, (-mu * G) / speed, (mu * G) / speed);
+        const beta = Math.atan2(this.vy, speed);
+        const over = Math.abs(this.r) > Math.abs(rRef) + 0.05 || Math.abs(beta) > 0.06;
+        if (over) {
+          this.r += (rRef - this.r) * Math.min(1, tc.yaw * h);
+          this.vy *= 1 - Math.min(1, tc.damp * h);
+          if (Math.abs(beta) > 0.08) this.tcActive = 0.25;
+        }
+      }
     } else {
       // Parking speeds: follow the wheels (kinematic), no sliding.
       this.vy *= 0.8;
@@ -601,6 +660,7 @@ export class PlayerDrive {
     this.lastEl.textContent = `Last ${this.lastLap ? this.lastLap.toFixed(2) : '--.--'}`;
     this.bestEl.textContent = `Best ${this.bestLap ? this.bestLap.time.toFixed(2) : '--.--'}`;
     this.drsEl.classList.toggle('on', this.drs);
+    this.tcBtn?.classList.toggle('active', this.tcActive > 0 && this.tc > 0);
     // Drift angle between where the car points and where it travels.
     const beta = Math.abs(Math.atan2(this.vy, Math.max(1, Math.abs(this.v))));
     const drifting = beta > deg(7) && Math.abs(this.v) > 6;
@@ -637,6 +697,7 @@ export class PlayerDrive {
         ctx.fillText(label, x + w / 2, 32);
       };
       const drsAvail = this.drsEl?.classList.contains('avail');
+      chip(W / 2 - 60, 120, `TC ${TC[this.tc].name.toUpperCase()}`, this.tcActive > 0 && this.tc ? '#F5C518' : '#2a2d33', this.tcActive > 0 && this.tc ? '#05070a' : this.tc ? '#9aa3ad' : '#6b7079');
       chip(12, 100, 'DRS', this.drs ? '#35d45a' : drsAvail ? '#F5C518' : '#2a2d33', this.drs || drsAvail ? '#05070a' : '#6b7079');
       const beta = Math.abs(Math.atan2(this.vy || 0, Math.max(1, Math.abs(this.v))));
       const drifting = beta > deg(7) && Math.abs(this.v) > 6;
