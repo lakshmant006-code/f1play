@@ -1,13 +1,13 @@
-// Google Analytics 4. The Measurement ID comes from the VITE_GA4_ID
-// environment variable at build time (set it in Vercel: Project Settings →
-// Environment Variables, then redeploy). Without an ID nothing loads and
-// track() does nothing, so local builds and tests stay silent.
+// Google Analytics 4 for www.celestera.online. The VITE_GA4_ID environment
+// variable overrides the built-in Measurement ID. Nothing loads on localhost,
+// so local play and tests don't count as visits.
 
-const ID = import.meta.env?.VITE_GA4_ID || '';
+const ID = import.meta.env?.VITE_GA4_ID || 'G-R3LKFK10D5';
 let ready = false;
 
 export function initAnalytics() {
   if (ready || !ID || typeof document === 'undefined') return;
+  if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) return;
   ready = true;
   window.dataLayer = window.dataLayer || [];
   window.gtag = function gtag() {
