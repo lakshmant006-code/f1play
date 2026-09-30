@@ -12,13 +12,18 @@ import { HorizontalTiltShiftShader } from 'three/addons/shaders/HorizontalTiltSh
 import { VerticalTiltShiftShader } from 'three/addons/shaders/VerticalTiltShiftShader.js';
 
 const GradeShader = {
-  uniforms: { tDiffuse: { value: null }, saturation: { value: 1.02 }, vignette: { value: 0.22 }, fade: { value: 0 } },
+  uniforms: { tDiffuse: { value: null }, saturation: { value: 1.02 }, vignette: { value: 0.22 }, fade: { value: 0 }, texel: { value: new THREE.Vector2(1 / 1024, 1 / 1024) }, sharpen: { value: 0.22 } },
   vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
   fragmentShader: `
     uniform sampler2D tDiffuse; uniform float saturation; uniform float vignette; uniform float fade;
+    uniform vec2 texel; uniform float sharpen;
     varying vec2 vUv;
     void main(){
       vec4 c = texture2D(tDiffuse, vUv);
+      // Light unsharp mask for crisp, HD-looking edges.
+      vec3 n = texture2D(tDiffuse, vUv + vec2(0.0, texel.y)).rgb + texture2D(tDiffuse, vUv - vec2(0.0, texel.y)).rgb
+             + texture2D(tDiffuse, vUv + vec2(texel.x, 0.0)).rgb + texture2D(tDiffuse, vUv - vec2(texel.x, 0.0)).rgb;
+      c.rgb = max(c.rgb + sharpen * (c.rgb * 4.0 - n), 0.0);
       float l = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
       c.rgb = mix(vec3(l), c.rgb, saturation);
       vec2 d = vUv - 0.5;
@@ -30,7 +35,11 @@ const GradeShader = {
 
 export function createPost(renderer, scene, camera) {
   const size = renderer.getSize(new THREE.Vector2());
-  const composer = new EffectComposer(renderer);
+  // Multisampled (MSAA) half-float targets: the renderer's own antialiasing
+  // does not reach post-processed frames, so the composer does it here.
+  const pr = renderer.getPixelRatio();
+  const msaaTarget = new THREE.WebGLRenderTarget(size.x * pr, size.y * pr, { type: THREE.HalfFloatType, samples: renderer.capabilities.isWebGL2 === false ? 0 : 4 });
+  const composer = new EffectComposer(renderer, msaaTarget);
   composer.addPass(new RenderPass(scene, camera));
 
   const outline = new OutlinePass(size.clone(), scene, camera);
@@ -51,11 +60,16 @@ export function createPost(renderer, scene, camera) {
   composer.addPass(grade);
   composer.addPass(new OutputPass());
 
+  // Tilt-shift: only a whisper of edge blur now, and none at all in first person.
   let tilt = 1;
   const setSize = (w, h) => {
+    composer.setPixelRatio(renderer.getPixelRatio());
     composer.setSize(w, h); // CSS pixels; the composer applies the pixel ratio to every pass
-    hBlur.uniforms.h.value = (2.2 * tilt) / w;
-    vBlur.uniforms.v.value = (2.2 * tilt) / h;
+    hBlur.uniforms.h.value = (0.9 * tilt) / w;
+    vBlur.uniforms.v.value = (0.9 * tilt) / h;
+    hBlur.enabled = vBlur.enabled = tilt > 0;
+    const pr = renderer.getPixelRatio();
+    grade.uniforms.texel.value.set(1 / (w * pr), 1 / (h * pr));
   };
 
   // Outline hover state with a 150 ms fade.

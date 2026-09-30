@@ -27,6 +27,11 @@ import { DawnCircuit } from '../tracks/dawnWorld.js';
 import { TRACK_WIDTH } from './layout.js';
 import { buildCharacter, animateCharacter, setPose, loadRecipe, EMOTES, PRESETS, SUITS, GLOVES, BROWS, MOUTHS, SKINS, SWATCHES } from '../character/blocky.js';
 
+const WORLDS = [
+  { id: 'sky', name: 'Sky Circuit', tip: 'Sky Circuit islands', swatch: 'linear-gradient(135deg,#74BDF0,#A6D6F7)' },
+  { id: 'dawn', name: 'Caspian Dawn', tip: 'Caspian Dawn islands', swatch: 'linear-gradient(135deg,#2C3F82,#F2A48E 60%,#FFD39A)' },
+];
+
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -48,6 +53,7 @@ export class Game {
     this.drivers = [];
     this.nextCompound = { solaris: 'soft', nordlys: 'soft' };
     this.rain = false;
+    this.world = 'sky';
     this.focus = null;
     this.unlocked = loadUnlocked();
     this.lastCelebration = null;
@@ -456,6 +462,45 @@ export class Game {
     );
   }
 
+  // Which islands the main page shows: 'sky' (the Sky Circuit) or 'dawn'
+  // (Caspian Dawn, to look round; driving and the rest stay as they are).
+  setWorld(id) {
+    if (id === this.world) return;
+    if (this.player.active || this.explorer.active || this.engineer.active || this.pitChallenge.active) {
+      this.ui.toast('Finish what you are doing first.', { icon: '⏳' });
+      return;
+    }
+    const apply = () => {
+      this.world = id;
+      this.trackChoice = id;
+      this.ui.closeModal();
+      this.ui.hideCard();
+      this.ui.hideTag();
+      this.interactions.setHover(null);
+      if (this.liveryView) this.exitLiveryView();
+      const rig = this.rig;
+      this.skyHome ||= rig.home;
+      if (id === 'dawn') {
+        this.circuit('dawn').show();
+        this.interactions.enabled = false; // the Sky Circuit's people and cars are hidden
+        rig.controls.maxDistance = 720;
+        rig.home = { target: new THREE.Vector3(0, 0, 25), distance: 560, azimuth: deg(35), elevation: deg(34) };
+      } else {
+        this.dawn?.hide();
+        this.interactions.enabled = true;
+        rig.controls.maxDistance = 330;
+        rig.home = this.skyHome;
+      }
+      this.worldBtns?.forEach((b, i) => b.setAttribute('aria-pressed', String(WORLDS[i].id === id)));
+      document.body.dataset.world = id;
+      this.goHome();
+    };
+    if (id === 'dawn' && !this.dawn) {
+      this.ui.toast('Loading Caspian Dawn…', { icon: '🌅', duration: 1500 });
+      setTimeout(apply, 60);
+    } else apply();
+  }
+
   // Track 2 is built the first time someone drives it.
   circuit(id) {
     if (id !== 'dawn') return this.homeCircuit;
@@ -463,8 +508,10 @@ export class Game {
     return this.dawn;
   }
 
-  driveCar(team, trackId = 'sky') {
+  driveCar(team, trackId = this.world) {
     if (this.player.active) return;
+    // Driving the Sky Circuit from the Caspian Dawn view: switch back first.
+    if (trackId === 'sky' && this.world !== 'sky') this.setWorld('sky');
     if (team.garageCar.drive?.mode !== 'parked') {
       this.ui.toast('That car is already out. Try the other one.', { icon: '⏳' });
       return;
@@ -1079,6 +1126,17 @@ export class Game {
     );
     this.ui.root.append(view);
     this.viewCtl = view;
+
+    // Island switcher: look round the Sky Circuit or Caspian Dawn islands.
+    this.worldBtns = WORLDS.map((w) =>
+      h('button', { 'aria-pressed': String(w.id === this.world), 'data-tip': w.tip, onclick: () => this.setWorld(w.id) }, h('span', { class: 'world-swatch', style: { background: w.swatch }, 'aria-hidden': 'true' }), h('span', { class: 'world-name' }, w.name))
+    );
+    this.ui.root.append(h('div', { class: 'world-switch', role: 'group', 'aria-label': 'Islands' }, ...this.worldBtns));
+    // Pit stops, the podium, walking in, rain and the crew jobs happen on the
+    // Sky Circuit: from Caspian Dawn they bring you back there first.
+    for (const id of ['btn-pit', 'btn-podium', 'btn-explore', 'btn-rain']) {
+      document.getElementById(id)?.addEventListener('click', () => this.world !== 'sky' && this.setWorld('sky'), { capture: true });
+    }
     document.getElementById('btn-help').addEventListener('click', () => {
       this.ui.openModal(
         h(
@@ -1104,7 +1162,7 @@ export class Game {
 
   // Track cards for the drive menu; the choice is remembered for the visit.
   trackPicker() {
-    this.trackChoice ||= 'sky';
+    this.trackChoice ||= this.world;
     const tracks = [
       { id: 'sky', name: 'Sky Circuit', blurb: 'Track 1 · the home circuit: pit lane, grandstand, four islands. Midday.', swatch: 'linear-gradient(135deg,#74BDF0,#A6D6F7)' },
       { id: 'dawn', name: 'Caspian Dawn', blurb: 'Track 2 · inspired by Baku: an old-city climb, a horseshoe, a waterfall to drive through and a DRS boulevard. The high bridge crosses over the low one. At dawn.', swatch: 'linear-gradient(135deg,#2C3F82,#F2A48E 60%,#FFD39A)' },
@@ -1168,6 +1226,7 @@ export class Game {
     this.pitChallenge.update(dt);
     this.engineer.update(dt);
     this.explorer.update(dt);
+    if (this.world === 'dawn' && !this.player.active) this.dawn?.update(dt);
     this.audio.update(this.explorer.active || this.player.active || this.engineer.active || !!this.pitChallenge.fp);
     this.updateCelebration(dt);
     this.particles.update(dt);

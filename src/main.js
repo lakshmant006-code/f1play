@@ -13,10 +13,14 @@ const canvas = document.getElementById('scene');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
 renderer.setClearColor(SCENERY.fog);
 const mobile = matchMedia('(pointer: coarse)').matches;
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, mobile ? 1.5 : 2));
+// Resolution: start sharp, then adapt (see the frame loop) up to the screen's
+// full density on devices that keep up, down a notch on ones that don't.
+const MAX_PR = Math.min(window.devicePixelRatio || 1, mobile ? 2.5 : 2);
+let pixelRatio = Math.min(MAX_PR, mobile ? 1.5 : 2);
+renderer.setPixelRatio(pixelRatio);
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFShadowMap;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
 
@@ -36,6 +40,22 @@ await Promise.race([document.fonts?.load('900 40px Nunito').catch(() => {}), new
 
 const game = new Game({ renderer, scene, camera, post, rig, ui });
 window.skyCircuit = game; // handy for debugging in the console
+// Sharpest texture filtering the GPU offers, for roads and grass seen at a glance.
+game.hdTextures = (root) => {
+  const aniso = Math.min(16, renderer.capabilities.getMaxAnisotropy());
+  root.traverse((o) => {
+    for (const m of [].concat(o.material || [])) {
+      for (const k of ['map', 'emissiveMap', 'bumpMap', 'normalMap', 'roughnessMap']) {
+        const t = m[k];
+        if (t && t.anisotropy < aniso) {
+          t.anisotropy = aniso;
+          t.needsUpdate = true;
+        }
+      }
+    }
+  });
+};
+game.hdTextures(scene);
 game.landing = initLanding(game);
 // Links like /?play=mechanic (from the creator) jump straight into a job.
 const playRole = new URLSearchParams(location.search).get('play');
@@ -64,11 +84,32 @@ function resize() {
 window.addEventListener('resize', resize);
 resize();
 
+// Every two seconds: below ~40 fps drop the resolution a step, above ~57 fps raise it.
+let frames = 0;
+let spent = 0;
+function adaptResolution(raw) {
+  if (raw <= 0 || raw > 0.5 || document.hidden) return;
+  frames++;
+  spent += raw;
+  if (spent < 2) return;
+  const avg = spent / frames;
+  frames = 0;
+  spent = 0;
+  const next = avg > 1 / 40 ? Math.max(0.75, pixelRatio - 0.25) : avg < 1 / 57 ? Math.min(MAX_PR, pixelRatio + 0.25) : pixelRatio;
+  if (next !== pixelRatio) {
+    pixelRatio = next;
+    renderer.setPixelRatio(pixelRatio);
+    resize();
+  }
+}
+
 const timer = new THREE.Timer();
 timer.connect(document);
 renderer.setAnimationLoop((now) => {
   timer.update(now);
-  const dt = THREE.MathUtils.clamp(timer.getDelta(), 0, 1 / 20);
+  const raw = timer.getDelta();
+  const dt = THREE.MathUtils.clamp(raw, 0, 1 / 20);
+  adaptResolution(raw);
   game.update(dt);
   rig.update(dt);
   post.update(dt);

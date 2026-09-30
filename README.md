@@ -93,6 +93,15 @@ Covers build-order steps 1 to 3 and most of 4 and 5 from the spec:
 - **Rotate the islands**: drag to orbit all the way round, from nearly level to
   overhead (8° to 85°), and scroll or pinch to zoom. The ↺ ↻ ▲ ▼ buttons step
   the view, ⟳ Auto turns it like a turntable, and ⌂ resets it.
+- **Island switcher** (bottom left): look round the Sky Circuit islands or the
+  Caspian Dawn islands on the main page, orbiting and zooming as usual. Drive
+  picks the track you are looking at; pit stops, the podium, walking in, rain
+  and the crew jobs bring you back to the Sky Circuit.
+- **Graphics**: multisampled antialiasing through the post-processing chain,
+  a light sharpening pass, only a whisper of tilt-shift blur, soft shadows,
+  full anisotropic texture filtering, and a resolution that adapts to the
+  device (up to the screen's full density while it keeps 57+ fps, down a
+  step below 40).
 - **Drive**: take Calder's #4 or Holm's #8 out yourself from the *Drive* button,
   a garage car's card, or the pit island's walking panel.
   - **Two tracks**: the Drive menu (and the driver job in *Play as*) lets you

@@ -71,6 +71,8 @@ export class RolePlay {
       return;
     }
     g.ui.closeModal();
+    // The crew jobs are on the Sky Circuit; the driver can take either track.
+    if (role !== 'driver' && g.world !== 'sky') g.setWorld('sky');
     const { recipe } = this.character();
     this.role = role;
     if (role === 'driver') this.playDriver(team, recipe);
