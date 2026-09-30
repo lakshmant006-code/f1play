@@ -347,7 +347,7 @@ function ribbonWall(frames, lateral, y0, y1) {
 // Covered grandstand: tiered concrete terraces with colored seat blocks,
 // aisles, a cantilevered roof on trusses and a video screen; a seated crowd of
 // little people (body + head, two instanced draw calls) that cheers.
-export function buildGrandstandHD({ len = 36 } = {}) {
+export function buildGrandstandHD({ len = 36, name = 'SKY CIRCUIT' } = {}) {
   const g = new THREE.Group();
   const { rows, rowD, rowH, base } = STAND;
   const terr = [];
@@ -372,7 +372,7 @@ export function buildGrandstandHD({ len = 36 } = {}) {
   const back = bevelBox(len + 0.6, base + rows * rowH + 3.4, 0.4, 0.05).translate(0, (base + rows * rowH + 3.4) / 2, -rows * rowD - 0.1);
   terr.push(back);
   for (const s of [1, -1]) terr.push(bevelBox(0.4, base + rows * rowH + 1, rows * rowD + 0.8, 0.05).translate(s * (len / 2 + 0.3), (base + rows * rowH + 1) / 2, -(rows * rowD) / 2 + 0.3));
-  const concrete = new THREE.Mesh(merge(terr), mat('#D8D4CB', { roughness: 0.85 }));
+  const concrete = new THREE.Mesh(merge(terr, { uv: true }), new THREE.MeshStandardMaterial({ color: '#E2DED5', map: concreteTexture(), roughness: 0.88 }));
   concrete.castShadow = concrete.receiveShadow = true;
   const seatMesh = new THREE.Mesh(merge(seats, { color: true }), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55 }));
   seatMesh.receiveShadow = true;
@@ -431,8 +431,28 @@ export function buildGrandstandHD({ len = 36 } = {}) {
   const led = new THREE.Mesh(new THREE.BoxGeometry(W - 0.6, 0.05, 0.05).translate(0, lipY - 0.36, zTip + 0.1), new THREE.MeshStandardMaterial({ color: '#ffffff', emissive: '#ffffff', emissiveIntensity: 1.2 }));
   // Downlights along the purlins.
   const lights = [];
-  for (const u of [0.38, 0.78]) for (let x = -len / 2 + 2; x <= len / 2 - 2; x += 3) lights.push(new THREE.CylinderGeometry(0.14, 0.14, 0.05, 10).translate(x, under(u) - 0.22, zAt(u)));
-  const lightMesh = new THREE.Mesh(merge(lights), new THREE.MeshStandardMaterial({ color: '#fff8e8', emissive: '#fff4d6', emissiveIntensity: 1.4 }));
+  for (const u of [0.3, 0.58, 0.86]) for (let x = -len / 2 + 2; x <= len / 2 - 2; x += 2.5) lights.push(new THREE.BoxGeometry(1.1, 0.06, 0.32).translate(x, under(u) - 0.2, zAt(u)));
+  const lightMesh = new THREE.Mesh(merge(lights), new THREE.MeshStandardMaterial({ color: '#fff8e8', emissive: '#ffe9c4', emissiveIntensity: 2.6 }));
+  lightMesh.userData.shadow = false;
+  // Warm light washing down the back wall under the roof.
+  const washTex = (() => {
+    const cv = document.createElement('canvas');
+    cv.width = 8;
+    cv.height = 128;
+    const x = cv.getContext('2d');
+    const gr = x.createLinearGradient(0, 0, 0, 128);
+    gr.addColorStop(0, 'rgba(255,228,180,0.75)');
+    gr.addColorStop(1, 'rgba(255,228,180,0)');
+    x.fillStyle = gr;
+    x.fillRect(0, 0, 8, 128);
+    const t = new THREE.CanvasTexture(cv);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  })();
+  const washH = 3.2;
+  const wash = new THREE.Mesh(new THREE.PlaneGeometry(len, washH), new THREE.MeshBasicMaterial({ map: washTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+  wash.position.set(0, base + rows * rowH + 3.4 - washH / 2 - 0.1, -rows * rowD + 0.12);
+  g.add(wash);
   // Glass clerestory between the back wall top and the roof heel.
   const glassH = under(0) - topY;
   const glass = new THREE.Mesh(new THREE.BoxGeometry(len + 0.6, glassH, 0.06).translate(0, topY + glassH / 2, zBack + 0.5), new THREE.MeshPhysicalMaterial({ color: '#bfe3f7', roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.45 }));
@@ -446,7 +466,7 @@ export function buildGrandstandHD({ len = 36 } = {}) {
   // Video screen on legs beside the west end of the stand, set back from the
   // front so its legs and panel stay clear of the track (which bends close
   // around the east end).
-  const screenTex = textTexture(['SKY CIRCUIT', 'LIVE'], { w: 512, h: 256, bg: '#0E1B2B', fg: '#F4F5F7' });
+  const screenTex = textTexture([name, 'LIVE'], { w: 512, h: 256, bg: '#0E1B2B', fg: '#F4F5F7' });
   const screen = new THREE.Mesh(new THREE.PlaneGeometry(7, 3.6), new THREE.MeshStandardMaterial({ map: screenTex, emissive: '#ffffff', emissiveMap: screenTex, emissiveIntensity: 0.6 }));
   const sx = -len / 2 - 4.2;
   const sz = -3;
@@ -455,11 +475,17 @@ export function buildGrandstandHD({ len = 36 } = {}) {
   frame.castShadow = true;
   g.add(frame, screen);
 
-  // Crowd: body (shirt colors) and head instances, a few waving flags.
-  const bodyGeo = new THREE.CapsuleGeometry(0.17, 0.28, 1, 6).translate(0, 0.38, 0);
-  const headGeo = new THREE.IcosahedronGeometry(0.13, 0).translate(0, 0.78, 0);
-  const shirts = TEAMS.flatMap((t) => [t.primary, t.primary, t.secondary, t.accent]).concat(['#ffffff', '#E8D35B', '#D96A5A', '#5A7FD9']);
+  // Crowd: seated fans with shoulders, heads, hair or caps and arms (about
+  // half of them up and waving), all instanced: five draw calls per stand.
+  const bodyGeo = new THREE.CapsuleGeometry(0.16, 0.26, 2, 8).scale(1.18, 1, 0.85).translate(0, 0.4, 0);
+  const headGeo = new THREE.SphereGeometry(0.125, 12, 9).translate(0, 0.8, 0.01);
+  const hairGeo = new THREE.SphereGeometry(0.133, 12, 6, 0, Math.PI * 2, 0, Math.PI * 0.55).translate(0, 0.82, -0.005);
+  const armGeo = new THREE.CapsuleGeometry(0.045, 0.34, 2, 6).translate(0, 0.2, 0);
+  const armsUp = merge([armGeo.clone().rotateZ(0.5).translate(0.2, 0.52, 0), armGeo.clone().rotateZ(-0.5).translate(-0.2, 0.52, 0)]);
+  const armsDown = merge([armGeo.clone().rotateZ(Math.PI - 0.25).rotateX(-0.7).translate(0.2, 0.56, 0.02), armGeo.clone().rotateZ(Math.PI + 0.25).rotateX(-0.7).translate(-0.2, 0.56, 0.02)]);
+  const shirts = TEAMS.flatMap((t) => [t.primary, t.primary, t.secondary, t.accent]).concat(['#ffffff', '#E8D35B', '#D96A5A', '#5A7FD9', '#2B2F36', '#F4F5F7']);
   const skins = ['#F1CFB3', '#E0AE88', '#C48B63', '#9C6644', '#6E452C'];
+  const hairs = ['#1f1a17', '#3b2a20', '#6b4a2f', '#a57c4a', '#d9c08a', '#8d8d8d', '#1f1a17'];
   const people = [];
   const rand = mulberry(9);
   for (let r = 0; r < rows; r++) {
@@ -467,24 +493,54 @@ export function buildGrandstandHD({ len = 36 } = {}) {
       const xa = aisleX[k] + 0.9;
       const xb = aisleX[k + 1] - 0.9;
       for (let x = xa; x <= xb; x += 0.62) {
-        if (rand() < 0.12) continue;
-        people.push({ x: x + (rand() - 0.5) * 0.1, y: base + r * rowH + 0.1, z: -r * rowD - 0.12, sh: shirts[Math.floor(rand() * shirts.length)], sk: skins[Math.floor(rand() * skins.length)], ph: rand() * 6.28, team: k });
+        if (rand() < 0.1) continue;
+        // Most fans wear their section's team colour.
+        const sh = rand() < 0.6 ? TEAMS[k % TEAMS.length].primary : shirts[Math.floor(rand() * shirts.length)];
+        people.push({ x: x + (rand() - 0.5) * 0.1, y: base + r * rowH + 0.1, z: -r * rowD - 0.12, sh, sk: skins[Math.floor(rand() * skins.length)], hair: rand() < 0.2 ? TEAMS[k % TEAMS.length].secondary : hairs[Math.floor(rand() * hairs.length)], ph: rand() * 6.28, up: rand() < 0.45, h: 0.94 + rand() * 0.12 });
       }
     }
   }
+  const ups = people.filter((p) => p.up);
+  const downs = people.filter((p) => !p.up);
   const bodies = new THREE.InstancedMesh(bodyGeo, new THREE.MeshStandardMaterial({ roughness: 0.8 }), people.length);
-  const heads = new THREE.InstancedMesh(headGeo, new THREE.MeshStandardMaterial({ roughness: 0.7 }), people.length);
+  const heads = new THREE.InstancedMesh(headGeo, new THREE.MeshStandardMaterial({ roughness: 0.65 }), people.length);
+  const hairMesh = new THREE.InstancedMesh(hairGeo, new THREE.MeshStandardMaterial({ roughness: 0.9 }), people.length);
+  const upMesh = new THREE.InstancedMesh(armsUp, new THREE.MeshStandardMaterial({ roughness: 0.75 }), ups.length);
+  const downMesh = new THREE.InstancedMesh(armsDown, new THREE.MeshStandardMaterial({ roughness: 0.8 }), downs.length);
   const m = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
+  const one = new THREE.Vector3();
+  const pos = new THREE.Vector3();
   const c = new THREE.Color();
   people.forEach((p, i) => {
-    m.makeTranslation(p.x, p.y, p.z);
-    bodies.setMatrixAt(i, m);
-    heads.setMatrixAt(i, m);
     bodies.setColorAt(i, c.set(p.sh));
     heads.setColorAt(i, c.set(p.sk));
+    hairMesh.setColorAt(i, c.set(p.hair));
   });
+  ups.forEach((p, i) => upMesh.setColorAt(i, c.set(p.sh)));
+  downs.forEach((p, i) => downMesh.setColorAt(i, c.set(p.sh)));
+  const placeCrowd = (t, excite) => {
+    let ui = 0;
+    let di = 0;
+    people.forEach((p, i) => {
+      const jump = Math.max(0, Math.sin(t * (3 + excite * 6) + p.ph)) * (0.02 + excite * 0.22);
+      pos.set(p.x, p.y + jump, p.z);
+      m.compose(pos, q.identity(), one.set(1, p.h, 1));
+      bodies.setMatrixAt(i, m);
+      heads.setMatrixAt(i, m);
+      hairMesh.setMatrixAt(i, m);
+      if (p.up) {
+        // Waving: a little sway about the shoulders.
+        q.setFromAxisAngle(V(0, 0, 1), Math.sin(t * (4 + excite * 4) + p.ph) * 0.18);
+        m.compose(pos, q, one);
+        upMesh.setMatrixAt(ui++, m);
+      } else downMesh.setMatrixAt(di++, m);
+    });
+    for (const mesh of [bodies, heads, hairMesh, upMesh, downMesh]) mesh.instanceMatrix.needsUpdate = true;
+  };
+  placeCrowd(0, 0);
   bodies.castShadow = true;
-  g.add(bodies, heads);
+  g.add(bodies, heads, hairMesh, upMesh, downMesh);
 
   // Flags on poles along the front.
   const flags = [];
@@ -500,14 +556,7 @@ export function buildGrandstandHD({ len = 36 } = {}) {
   g.add(new THREE.Mesh(merge(flags), mat('#C9CED6', { metalness: 0.6, roughness: 0.3 })));
 
   g.userData.update = (t, excite = 0) => {
-    people.forEach((p, i) => {
-      const jump = Math.max(0, Math.sin(t * (3 + excite * 6) + p.ph)) * (0.02 + excite * 0.22);
-      m.makeTranslation(p.x, p.y + jump, p.z);
-      bodies.setMatrixAt(i, m);
-      heads.setMatrixAt(i, m);
-    });
-    bodies.instanceMatrix.needsUpdate = true;
-    heads.instanceMatrix.needsUpdate = true;
+    placeCrowd(t, excite);
     // Flags ripple.
     for (const f of flagMeshes) {
       const pa = f.geometry.attributes.position;
@@ -723,3 +772,44 @@ function mulberry(a) {
   };
 }
 
+
+// Board-formed concrete: a pale grey with fine aggregate, soft stains and
+// faint formwork lines (maps onto each bevelled box face).
+let concreteTex = null;
+function concreteTexture() {
+  if (concreteTex) return concreteTex;
+  const S = 256;
+  const c = document.createElement('canvas');
+  c.width = c.height = S;
+  const x = c.getContext('2d');
+  x.fillStyle = '#e6e2d9';
+  x.fillRect(0, 0, S, S);
+  const r = mulberry(17);
+  for (let i = 0; i < 18; i++) {
+    const gx = r() * S;
+    const gy = r() * S;
+    const rad = 20 + r() * 60;
+    const gr = x.createRadialGradient(gx, gy, 0, gx, gy, rad);
+    gr.addColorStop(0, r() < 0.5 ? 'rgba(160,154,142,0.18)' : 'rgba(255,255,250,0.2)');
+    gr.addColorStop(1, 'rgba(0,0,0,0)');
+    x.fillStyle = gr;
+    x.fillRect(gx - rad, gy - rad, rad * 2, rad * 2);
+  }
+  for (let i = 0; i < 5000; i++) {
+    const v = 150 + r() * 90;
+    x.fillStyle = `rgba(${v},${v - 3},${v - 10},0.35)`;
+    x.fillRect(r() * S, r() * S, 1.2, 1.2);
+  }
+  x.strokeStyle = 'rgba(120,114,104,0.18)';
+  for (let y = 0; y < S; y += 32) {
+    x.beginPath();
+    x.moveTo(0, y + 0.5);
+    x.lineTo(S, y + 0.5);
+    x.stroke();
+  }
+  concreteTex = new THREE.CanvasTexture(c);
+  concreteTex.wrapS = concreteTex.wrapT = THREE.RepeatWrapping;
+  concreteTex.colorSpace = THREE.SRGBColorSpace;
+  concreteTex.anisotropy = 8;
+  return concreteTex;
+}

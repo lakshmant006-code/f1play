@@ -19,9 +19,11 @@ function rng(seed = 7) {
 // Shared grass texture: soft olive patches with a fine speckle, mapped in
 // world meters (the extruded cap's UVs are the shape's x/z coordinates).
 let grassTex = null;
+// Lush turf: soft patches for colour variation, faint mowing stripes, then
+// thousands of short blade strokes in several greens (sub-metre detail up close).
 function grassTexture() {
   if (grassTex) return grassTex;
-  const S = 512;
+  const S = 1024;
   const c = document.createElement('canvas');
   c.width = c.height = S;
   const ctx = c.getContext('2d');
@@ -39,19 +41,42 @@ function grassTexture() {
       ctx.fillRect(x + dx - rad, y + dy - rad, rad * 2, rad * 2);
     }
   };
-  for (let i = 0; i < 26; i++) blob(r() * S, r() * S, 40 + r() * 110, i % 3 ? SCENERY.grassDark : SCENERY.grassLight, 0.35);
-  for (let i = 0; i < 10; i++) blob(r() * S, r() * S, 30 + r() * 60, SCENERY.meadow, 0.3);
-  ctx.globalAlpha = 1;
-  for (let i = 0; i < 9000; i++) {
-    const l = r();
-    ctx.fillStyle = l < 0.5 ? 'rgba(40,62,26,0.22)' : 'rgba(170,190,110,0.18)';
-    ctx.fillRect(r() * S, r() * S, 1.5, 1.5);
+  for (let i = 0; i < 30; i++) blob(r() * S, r() * S, 80 + r() * 200, i % 3 ? SCENERY.grassDark : SCENERY.grassLight, 0.3);
+  for (let i = 0; i < 12; i++) blob(r() * S, r() * S, 60 + r() * 120, SCENERY.meadow, 0.25);
+  // Mowing stripes (8 across the tile, so they line up when it repeats).
+  ctx.globalAlpha = 0.07;
+  for (let k = 0; k < 8; k += 2) {
+    ctx.fillStyle = '#e8f5c8';
+    ctx.fillRect((k * S) / 8, 0, S / 8, S);
   }
+  // Blades: short slanted strokes, dark at the base and light at the tip.
+  const greens = ['#3f6a2a', '#4d7c32', '#5f913d', '#78a64b', '#94b85c', '#2f5222'];
+  ctx.lineCap = 'round';
+  for (let i = 0; i < 60000; i++) {
+    const x = r() * S;
+    const y = r() * S;
+    const len = 3 + r() * 6;
+    const a = -Math.PI / 2 + (r() - 0.5) * 0.9;
+    ctx.globalAlpha = 0.35 + r() * 0.35;
+    ctx.strokeStyle = greens[Math.floor(r() * greens.length)];
+    ctx.lineWidth = 0.8 + r() * 0.9;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + Math.cos(a) * len, y + Math.sin(a) * len);
+    ctx.stroke();
+  }
+  // Tiny clover and daisy flecks.
+  for (let i = 0; i < 1400; i++) {
+    ctx.globalAlpha = 0.5;
+    ctx.fillStyle = r() < 0.85 ? '#a9c96a' : '#f4f1e6';
+    ctx.fillRect(r() * S, r() * S, 1.6, 1.6);
+  }
+  ctx.globalAlpha = 1;
   grassTex = new THREE.CanvasTexture(c);
   grassTex.wrapS = grassTex.wrapT = THREE.RepeatWrapping;
-  grassTex.repeat.set(1 / 90, 1 / 90);
+  grassTex.repeat.set(1 / 60, 1 / 60);
   grassTex.colorSpace = THREE.SRGBColorSpace;
-  grassTex.anisotropy = 8;
+  grassTex.anisotropy = 16;
   return grassTex;
 }
 
@@ -472,23 +497,57 @@ function ribbon(path, halfWidth, y, { from = 0, to = path.length, step = 1, offs
   return g;
 }
 
+// Asphalt: fine aggregate in several greys, a few sealed cracks, and the
+// darker rubbered racing line down the middle of the tile (u runs across the
+// road, v along it, 4 m per tile).
+let asphaltTex = null;
 export function asphaltTexture() {
+  if (asphaltTex) return asphaltTex;
+  const W = 512;
+  const H = 512;
   const c = document.createElement('canvas');
-  c.width = c.height = 256;
+  c.width = W;
+  c.height = H;
   const ctx = c.getContext('2d');
   ctx.fillStyle = PALETTE.asphalt;
-  ctx.fillRect(0, 0, 256, 256);
+  ctx.fillRect(0, 0, W, H);
+  // Rubber on the racing line and lighter, dusty edges.
+  const band = ctx.createLinearGradient(0, 0, W, 0);
+  band.addColorStop(0, 'rgba(120,122,126,0.22)');
+  band.addColorStop(0.18, 'rgba(0,0,0,0)');
+  band.addColorStop(0.38, 'rgba(20,20,22,0.22)');
+  band.addColorStop(0.62, 'rgba(20,20,22,0.22)');
+  band.addColorStop(0.82, 'rgba(0,0,0,0)');
+  band.addColorStop(1, 'rgba(120,122,126,0.22)');
+  ctx.fillStyle = band;
+  ctx.fillRect(0, 0, W, H);
   const r = rng(3);
-  for (let i = 0; i < 2500; i++) {
-    const v = 50 + r() * 30;
-    ctx.fillStyle = `rgba(${v},${v + 2},${v + 6},0.35)`;
-    ctx.fillRect(r() * 256, r() * 256, 1.5, 1.5);
+  for (let i = 0; i < 26000; i++) {
+    const v = 38 + r() * 58;
+    ctx.fillStyle = `rgba(${v},${v + 2},${v + 5},${0.25 + r() * 0.35})`;
+    const sz = 0.8 + r() * 1.8;
+    ctx.fillRect(r() * W, r() * H, sz, sz);
   }
-  const t = new THREE.CanvasTexture(c);
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = 8;
-  return t;
+  // Sealed cracks: thin dark wandering lines.
+  ctx.strokeStyle = 'rgba(18,18,20,0.45)';
+  ctx.lineWidth = 1.2;
+  for (let k = 0; k < 5; k++) {
+    let x = r() * W;
+    let y = r() * H;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    for (let j = 0; j < 8; j++) {
+      x += (r() - 0.5) * 40;
+      y += 8 + r() * 20;
+      ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+  asphaltTex = new THREE.CanvasTexture(c);
+  asphaltTex.wrapS = asphaltTex.wrapT = THREE.RepeatWrapping;
+  asphaltTex.colorSpace = THREE.SRGBColorSpace;
+  asphaltTex.anisotropy = 16;
+  return asphaltTex;
 }
 
 export function buildTrackMeshes(track, pit, onIsland = () => true) {
@@ -522,12 +581,8 @@ export function buildTrackMeshes(track, pit, onIsland = () => true) {
   const N = Math.ceil(track.length / STEP);
   const kerbGeos = [];
   for (const side of [1, -1]) {
-    // Where this side needs a kerb: the inside of every corner, the outside of tight ones.
-    let on = Array.from({ length: N }, (_, i) => {
-      track.at(i * STEP, smp);
-      const k = smp.curv;
-      return Math.abs(k) > 0.035 && (Math.sign(k) === side || Math.abs(k) > 0.06);
-    });
+    // Red and white kerbs line the whole lap on both sides.
+    let on = Array.from({ length: N }, () => true);
     // Grow each run a little and close small gaps so kerbs start and end cleanly.
     const grow = Math.round(3 / STEP);
     on = on.map((_, i) => {

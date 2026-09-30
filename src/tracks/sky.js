@@ -6,7 +6,8 @@ import * as THREE from 'three';
 import { buildTrackMeshes, buildClouds, buildSky } from '../world/world.js';
 import { buildRaisedPodium } from '../world/podium.js';
 import { buildIslandShapes, buildIslands, buildBridges, buildGrandstandHD, buildWatchTower, buildStartGantry, buildTrackBoards, SKY_LANDMARKS } from '../world/circuit.js';
-import { buildTrack, buildPitLane, pitLaneExtras, PIT_ISLAND_RECT, TRACK_WIDTH } from '../game/layout.js';
+import { buildTrack, buildPitLane, pitLaneExtras, PIT_ISLAND_RECT, TRACK_WIDTH, PIT_WIDTH } from '../game/layout.js';
+import { buildPalms } from '../world/flora.js';
 
 // Midday light: a warm key from the south east, a blue sky fill.
 export const MIDDAY = {
@@ -56,6 +57,7 @@ export function buildSkyCircuit() {
   podium.rotation.y = L.podium.rot;
   const clouds = buildClouds();
   venue.add(grandstand, tower, podium, clouds, buildSky());
+  venue.add(buildPalms(skyPalmSpots(track, pit, onIsland)));
 
   return {
     id: 'sky',
@@ -80,4 +82,35 @@ export function buildSkyCircuit() {
     // Walls: wide run-off on the islands, tight barriers on the bridges.
     limit: (s, x, z) => (onIsland(x, z) ? TRACK_WIDTH / 2 + 4.8 : TRACK_WIDTH / 2 + 1.5),
   };
+}
+
+// Palms along the run-off on the islands: clear of the road, the pit lane,
+// the paddock and the landmarks.
+function skyPalmSpots(track, pit, onIsland) {
+  const L = SKY_LANDMARKS;
+  const spots = [];
+  const smp = {};
+  let seed = 23;
+  const r = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const clear = (x, z, d) => {
+    for (let i = 0; i < track.n; i += 2) if (Math.hypot(track.pos[i].x - x, track.pos[i].z - z) < d) return false;
+    return true;
+  };
+  for (let s = 0; s < track.length; s += 15) {
+    track.at(s, smp);
+    const n = new THREE.Vector3(smp.tan.z, 0, -smp.tan.x).normalize();
+    for (const side of [1, -1]) {
+      const off = TRACK_WIDTH / 2 + 8 + r() * 2;
+      const x = smp.pos.x + n.x * side * off;
+      const z = smp.pos.z + n.z * side * off;
+      if (!onIsland(x, z) || !clear(x, z, TRACK_WIDTH / 2 + 7)) continue;
+      if (pit.at(pit.nearest(new THREE.Vector3(x, 0, z))).pos.distanceTo(new THREE.Vector3(x, 0, z)) < PIT_WIDTH / 2 + 6) continue;
+      if (x > -50 && x < 50 && z < -38) continue; // the paddock
+      if (Math.abs(x - L.grandstand.x) < L.grandstand.len / 2 + 6 && Math.abs(z - L.grandstand.z) < 16) continue;
+      if (Math.hypot(x - L.tower.x, z - L.tower.z) < 12 || Math.hypot(x - L.podium.x, z - L.podium.z) < 20) continue;
+      if (spots.some((p) => Math.hypot(p.x - x, p.z - z) < 9)) continue;
+      spots.push({ x, z, yaw: r() * 6.28, scale: 0.8 + r() * 0.3 });
+    }
+  }
+  return spots;
 }

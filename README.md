@@ -109,6 +109,12 @@ Covers build-order steps 1 to 3 and most of 4 and 5 from the spec:
   upshifts and blips on downshifts (with a crackle for your own car), a
   crowd bed, and splash and thud effects. On phones and iPads it starts on
   the first tap and plays even with the silent switch on.
+- **Scenery detail** (both circuits): grandstands in board-formed concrete
+  with lit roof undersides and a crowd of fans (shoulders, hair or caps, arms
+  up and waving, mostly in their section's team colour); palm trees with
+  ringed trunks, full feathered fronds and coconuts; red and white kerbs
+  along the whole lap; asphalt with aggregate, a rubbered racing line and
+  sealed cracks; lush turf with mowing stripes and blade detail.
 - **Graphics**: multisampled antialiasing through the post-processing chain,
   a light sharpening pass, only a whisper of tilt-shift blur, soft shadows,
   full anisotropic texture filtering, and a resolution that adapts to the
@@ -173,6 +179,16 @@ Covers build-order steps 1 to 3 and most of 4 and 5 from the spec:
   pit challenge from engineers and crew, live timing and tire choice from
   strategists, podium picks with champagne. Tab/Enter/Escape work everywhere,
   touch uses tap and long press, and reduced motion swaps glides for fades.
+
+## Analytics
+
+Google Analytics 4 is wired into every page (game, cards, creator, Learn).
+Google's tag for the Celestera web stream (`G-R3LKFK10D5`) is pasted at the
+top of each page's `<head>`, and `src/analytics.js` sends game events through
+it. Besides page views, the game sends `select_track`,
+`drive_start`, `lap_complete` (track, team, lap time, personal best),
+`pit_stop` (stop time), `play_as` (role), `sign_up` and, from the creator,
+`character_saved`.
 
 ## Driver cards
 

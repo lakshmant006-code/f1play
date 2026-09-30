@@ -12,6 +12,7 @@
 
 import * as THREE from 'three';
 import { Path } from '../game/path.js';
+import { PIT_ISLAND_RECT, pitLaneExtras } from '../game/layout.js';
 
 const v = (x, y, z) => new THREE.Vector3(x, y, z);
 
@@ -70,6 +71,7 @@ export function dawnWidth(features) {
 // Where the landmarks stand (same shape as the Sky Circuit's LANDMARKS).
 export const DAWN_LANDMARKS = {
   grandstand: { x: 88, z: -12, rot: Math.PI, len: 34 }, // north of the straight, facing it
+  grandstand2: { x: 166.7, z: -40.4, rot: -0.626, len: 30 }, // outside turn 1, facing back up the straight
   tower: { x: 70, z: 50 }, // its own island in the south infield
   podium: { x: -18, z: 34, rot: -Math.PI * 0.8 }, // west island, facing the track
   flames: { x: 136, z: 34 },
@@ -96,3 +98,38 @@ export function dawnIslandArcs(track) {
     return { ...isl, arcs: a <= b ? [[a, b]] : [[a, track.length], [0, b]] };
   });
 }
+
+// Ground beyond the road margin for the paddock and each landmark, as extra
+// island cells. Each patch must touch its island's road strip, or it would be
+// cut off as a separate scrap (the island keeps only its outline's main loop).
+export function dawnExtras(track, pit, islands) {
+  const L = DAWN_LANDMARKS;
+  const idx = (id) => islands.findIndex((i) => i.id === id);
+  const g = L.grandstand;
+  const { ledge } = dawnLedge(track);
+  return [
+    { ...PIT_ISLAND_RECT, island: idx('pit') },
+    ...pitLaneExtras(pit, idx('pit')),
+    // Grandstand, north of the straight facing it (rot = pi: it extends north,
+    // and its video screen stands off its west end, at +x): reaching south to
+    // the straight's own ground so the two join.
+    { shape: 'rect', x0: g.x - g.len / 2 - 4, x1: g.x + g.len / 2 + 11, z0: -30, z1: g.z + 18, island: idx('pit') },
+    // Turn 1 grandstand: a disc under its footprint (it extends back, away from the road).
+    { shape: 'circle', x: L.grandstand2.x - Math.sin(L.grandstand2.rot) * 6, z: L.grandstand2.z - Math.cos(L.grandstand2.rot) * 6, r: 24, island: idx('pit') },
+    { shape: 'circle', x: L.tower.x, z: L.tower.z, r: 15, island: idx('tower') },
+    { shape: 'circle', x: L.flames.x, z: L.flames.z, r: 25, island: idx('east') },
+    { shape: 'rect', ...L.oldCity, island: idx('oldcity') },
+    { shape: 'circle', x: ledge.x, z: ledge.z, r: 14, island: idx('waterfall') },
+    { shape: 'circle', x: L.podium.x + Math.sin(L.podium.rot) * 5, z: L.podium.z + Math.cos(L.podium.rot) * 5, r: 19, island: idx('podium') },
+  ];
+}
+
+// The waterfall ledge: beside the descent, away from the old-city infield.
+export function dawnLedge(track) {
+  const wf = track.at(track.nearest(v(78, 3, 306)));
+  const len = Math.hypot(wf.tan.x, wf.tan.z);
+  const out = v(-wf.tan.z / len, 0, wf.tan.x / len);
+  return { ledge: wf.pos.clone().setY(0).addScaledVector(out, DAWN_WIDTH / 2 + 1.5 + 13), out };
+}
+
+export const DAWN_ISLAND_OPTS = { area: [-130, -100, 340, 490], margin: 13, clear: 5 };

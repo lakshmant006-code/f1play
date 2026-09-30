@@ -4,6 +4,7 @@
 // snapshot, which become the player's card and their character in the paddock.
 
 import * as THREE from 'three';
+import { track } from '../src/analytics.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
@@ -12,6 +13,7 @@ import {
   PRESETS, SUITS, GLOVES, BROWS, MOUTHS, PROPS, VISORS, SKINS, SWATCHES, EMOTES, DEFAULT_RECIPE,
 } from '../src/character/blocky.js';
 import { DRIVERS } from '../src/data.js';
+
 
 const $ = (id) => document.getElementById(id);
 const TAKEN = new Set(DRIVERS.map((d) => d.number)); // roster numbers are reserved
@@ -231,6 +233,7 @@ $('save').addEventListener('click', () => {
   recipe.number = Number($('number').value);
   const snapshot = cardSnapshot();
   const ok = saveRecipe(recipe, snapshot);
+  if (ok) track('character_saved', { preset: recipe.preset });
   $('saved').innerHTML = ok
     ? `Saved <b>#${recipe.number} ${escapeHtml(recipe.name)}</b>. Play as <a href="/?play=driver">driver</a>, <a href="/?play=mechanic">mechanic</a> or <a href="/?play=engineer">race engineer</a>, or <a href="/card/">see your card</a>.`
     : 'Could not save in this browser (storage is blocked).';

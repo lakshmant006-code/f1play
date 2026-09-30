@@ -11,6 +11,7 @@ import car11 from '../images/car-11.png';
 import car6 from '../images/car-6.png';
 import car3 from '../images/car-3.png';
 
+
 const ART = { 4: car4, 8: car8, 11: car11, 6: car6, 3: car3 };
 
 // One card per team: the driver of the car in that team's garage.

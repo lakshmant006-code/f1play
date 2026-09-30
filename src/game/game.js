@@ -25,6 +25,7 @@ import { PlayerDrive } from '../drive.js';
 import { EngineerMode } from './engineer.js';
 import { RolePlay } from './roles.js';
 import { DawnCircuit } from '../tracks/dawnWorld.js';
+import { track } from '../analytics.js';
 import { buildCharacter, animateCharacter, setPose, loadRecipe, EMOTES, PRESETS, SUITS, GLOVES, BROWS, MOUTHS, SKINS, SWATCHES } from '../character/blocky.js';
 
 const WORLDS = [
@@ -60,6 +61,7 @@ export class Game {
     this.onPitResult = (r) => {
       // A strong stop wins the celebration for that car's driver.
       if (r.time < PIT.target) this.lastWinner = r.number;
+      track('pit_stop', { track: this.world, stop_time: Number(r.time.toFixed(2)) });
     };
     this.particles = new Particles();
     scene.add(this.particles.points);
@@ -494,6 +496,7 @@ export class Game {
       this.interactions.setHover(null);
       if (this.liveryView) this.exitLiveryView();
       this.useCircuit(this.circuitFor(id));
+      track('select_track', { track: id });
       this.worldBtns?.forEach((b, i) => b.setAttribute('aria-pressed', String(WORLDS[i].id === id)));
       document.body.dataset.world = id;
       this.goHome();
