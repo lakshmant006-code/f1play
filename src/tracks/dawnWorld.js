@@ -10,6 +10,7 @@ import { buildClouds, asphaltTexture, textTexture, fbm } from '../world/world.js
 import { buildGrandstandHD, buildStartGantry, buildIslandShapes, buildIslands } from '../world/circuit.js';
 import { buildRaisedPodium } from '../world/podium.js';
 import { buildDawnTower } from '../world/towers.js';
+import { buildPalms } from '../world/flora.js';
 import { buildPitLane, PIT_WIDTH } from '../game/layout.js';
 import { buildDawnTrack, dawnFeatures, dawnWidth, dawnIslandArcs, dawnExtras, dawnLedge, DAWN_ISLAND_OPTS, DAWN_LANDMARKS, DAWN_WIDTH } from './dawnLayout.js';
 
@@ -415,12 +416,12 @@ export class DawnCircuit {
     lineMesh.userData.shadow = false;
     g.add(lineMesh);
 
-    // Kerbs on the inside of corners (and both sides of tight ones), striped.
+    // Red and white kerbs line the whole lap on both sides.
     const red = new THREE.Color('#D8312B');
     const wh = new THREE.Color('#F2F2EE');
     const kerbs = [];
     for (const side of [1, -1]) {
-      const need = (f) => Math.abs(f.curv) > 0.03 && (Math.sign(f.curv) === side || Math.abs(f.curv) > 0.055);
+      const need = () => true;
       const grown = F.map((_, i) => {
         for (let d = -3; d <= 3; d++) if (need(F[(i + d + F.length) % F.length])) return true;
         return false;
@@ -838,48 +839,21 @@ export class DawnCircuit {
     const g = this.venue;
     const F = this.frames;
     const R = rng(8);
-    const trunk = new THREE.CylinderGeometry(0.22, 0.38, 8, 8, 6);
-    const tp = trunk.attributes.position;
-    for (let i = 0; i < tp.count; i++) {
-      const y = tp.getY(i) + 4;
-      tp.setX(i, tp.getX(i) + (y / 8) ** 2 * 0.9);
-      tp.setY(i, y);
-    }
-    trunk.computeVertexNormals();
-    const leaves = [];
-    for (let k = 0; k < 9; k++) {
-      const leaf = new THREE.PlaneGeometry(1.1, 5, 2, 6).translate(0, 2.5, 0);
-      const lp = leaf.attributes.position;
-      for (let i = 0; i < lp.count; i++) {
-        const t = lp.getY(i) / 5;
-        lp.setZ(i, -t * t * 2.2 - Math.abs(lp.getX(i)) * 0.3);
-        lp.setX(i, lp.getX(i) * (1 - t * 0.7));
-      }
-      leaf.rotateX(-Math.PI / 2 + 0.5).rotateY((k / 9) * Math.PI * 2).translate(0.9, 8, 0);
-      leaves.push(leaf);
-    }
-    const crown = merge(leaves);
-    crown.computeVertexNormals();
     const spots = [];
     const stand = this.grandstand.position;
+    const stand2 = this.grandstand2.position;
     for (let k = 0; k < F.length; k += 12) {
       const f = F[k];
       const onBoulevard = (f.p.z < -30 && f.p.x > -40 && f.p.x < 150) || (f.p.x > 168 && f.p.z < 50);
       if (!onBoulevard) continue;
       for (const side of [1, -1]) {
         if (!this.barrier[side][k]) continue;
-        const p = f.p.clone().addScaledVector(f.n, side * (f.E + 2.8 + R() * 1.2)).setY(0);
-        if (!this.onIsland(p.x, p.z) || this.nearPit(p.x, p.z, 10) || Math.abs(p.x - stand.x) < DAWN_LANDMARKS.grandstand.len / 2 + 3) continue;
-        spots.push(new THREE.Matrix4().compose(p, new THREE.Quaternion().setFromAxisAngle(V(0, 1, 0), R() * 6.28), V(1, 0.9 + R() * 0.3, 1)));
+        const p = f.p.clone().addScaledVector(f.n, side * (f.E + 2.8 + R() * 1.2));
+        if (!this.onIsland(p.x, p.z) || this.nearPit(p.x, p.z, 10) || Math.abs(p.x - stand.x) < DAWN_LANDMARKS.grandstand.len / 2 + 3 || Math.hypot(p.x - stand2.x, p.z - stand2.z) < 22) continue;
+        spots.push({ x: p.x, z: p.z, yaw: R() * 6.28, scale: 0.9 + R() * 0.3 });
       }
     }
-    const trunks = new THREE.InstancedMesh(trunk, mat('#8B6B4A', { roughness: 0.95 }), spots.length);
-    const crowns = new THREE.InstancedMesh(crown, mat('#4F8A3E', { roughness: 0.8, side: THREE.DoubleSide }), spots.length);
-    spots.forEach((m, i) => {
-      trunks.setMatrixAt(i, m);
-      crowns.setMatrixAt(i, m);
-    });
-    g.add(trunks, crowns);
+    g.add(buildPalms(spots));
     g.add(buildFlameTowers(DAWN_LANDMARKS.flames));
   }
 

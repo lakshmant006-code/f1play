@@ -109,6 +109,12 @@ Covers build-order steps 1 to 3 and most of 4 and 5 from the spec:
   upshifts and blips on downshifts (with a crackle for your own car), a
   crowd bed, and splash and thud effects. On phones and iPads it starts on
   the first tap and plays even with the silent switch on.
+- **Scenery detail** (both circuits): grandstands in board-formed concrete
+  with lit roof undersides and a crowd of fans (shoulders, hair or caps, arms
+  up and waving, mostly in their section's team colour); palm trees with
+  ringed trunks, full feathered fronds and coconuts; red and white kerbs
+  along the whole lap; asphalt with aggregate, a rubbered racing line and
+  sealed cracks; lush turf with mowing stripes and blade detail.
 - **Graphics**: multisampled antialiasing through the post-processing chain,
   a light sharpening pass, only a whisper of tilt-shift blur, soft shadows,
   full anisotropic texture filtering, and a resolution that adapts to the
