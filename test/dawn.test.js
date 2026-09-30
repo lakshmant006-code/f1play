@@ -118,6 +118,14 @@ describe('Caspian Dawn islands', () => {
     const g = L.grandstand;
     // Grandstand corners (it faces south, extends 15 m north) and its video screen off the west end.
     for (const [dx, dz] of [[-g.len / 2, -3], [g.len / 2, -3], [-g.len / 2, 14], [g.len / 2, 14], [g.len / 2 + 8, 3]]) expect(onGround(g.x + dx, g.z + dz)).toBe(true);
+    // The turn 1 stand: rotate its local footprint (front at z 3.4, back 12 m
+    // behind, the video screen off its -x end) into the world.
+    const g2 = L.grandstand2;
+    const at2 = (lx, lz) => [g2.x + lx * Math.cos(g2.rot) + lz * Math.sin(g2.rot), g2.z - lx * Math.sin(g2.rot) + lz * Math.cos(g2.rot)];
+    for (const [lx, lz] of [[-g2.len / 2, 3], [g2.len / 2, 3], [-g2.len / 2, -13], [g2.len / 2, -13], [-g2.len / 2 - 8, -3]]) expect(onGround(...at2(lx, lz))).toBe(true);
+    // And its front stays clear of the road.
+    const clear2 = Math.min(...track.pos.map((q) => Math.hypot(q.x - g2.x, q.z - g2.z)));
+    expect(clear2).toBeGreaterThan(14);
     expect(onGround(L.tower.x, L.tower.z)).toBe(true);
     expect(onGround(L.flames.x, L.flames.z)).toBe(true);
     expect(onGround(L.podium.x, L.podium.z)).toBe(true);

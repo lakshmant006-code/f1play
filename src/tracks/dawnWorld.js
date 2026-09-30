@@ -665,6 +665,11 @@ export class DawnCircuit {
     this.grandstand = buildGrandstandHD({ len: L.grandstand.len, name: 'CASPIAN DAWN' });
     this.grandstand.position.set(L.grandstand.x, 0, L.grandstand.z);
     this.grandstand.rotation.y = L.grandstand.rot;
+    // A second stand outside turn 1, where the DRS straight ends.
+    this.grandstand2 = buildGrandstandHD({ len: L.grandstand2.len, name: 'TURN 1' });
+    this.grandstand2.position.set(L.grandstand2.x, 0, L.grandstand2.z);
+    this.grandstand2.rotation.y = L.grandstand2.rot;
+    g.add(this.grandstand2);
     this.tower = buildDawnTower();
     this.tower.position.set(L.tower.x, 0, L.tower.z);
     this.tower.rotation.y = Math.atan2(0 - L.tower.x, -35 - L.tower.z); // board faces the pit straight
@@ -894,6 +899,7 @@ export class DawnCircuit {
     this.water.uniforms.time.value = this.time;
     this.led.uniforms.time.value = this.time;
     this.sky.position.copy(game.camera.position);
+    this.grandstand2.userData.update(this.time, player?.drs ? 0.8 : 0.2); // cheers when DRS opens
     const cam = game.camera.position;
     if (cam.distanceTo(this.mistAt[1]) < 260 && Math.random() < dt * 24) {
       game.particles.emit({ pos: this.mistAt[0], vel: V(0, 2, 0), color: ['#ffffff', '#f7e6df', '#e9f4fb'], life: 3, size: 6, gravity: 0.3, drag: 0.6, spread: 4, count: 3, jitter: 10 });

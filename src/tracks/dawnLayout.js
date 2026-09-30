@@ -71,6 +71,7 @@ export function dawnWidth(features) {
 // Where the landmarks stand (same shape as the Sky Circuit's LANDMARKS).
 export const DAWN_LANDMARKS = {
   grandstand: { x: 88, z: -12, rot: Math.PI, len: 34 }, // north of the straight, facing it
+  grandstand2: { x: 166.7, z: -40.4, rot: -0.626, len: 30 }, // outside turn 1, facing back up the straight
   tower: { x: 70, z: 50 }, // its own island in the south infield
   podium: { x: -18, z: 34, rot: -Math.PI * 0.8 }, // west island, facing the track
   flames: { x: 136, z: 34 },
@@ -113,6 +114,8 @@ export function dawnExtras(track, pit, islands) {
     // and its video screen stands off its west end, at +x): reaching south to
     // the straight's own ground so the two join.
     { shape: 'rect', x0: g.x - g.len / 2 - 4, x1: g.x + g.len / 2 + 11, z0: -30, z1: g.z + 18, island: idx('pit') },
+    // Turn 1 grandstand: a disc under its footprint (it extends back, away from the road).
+    { shape: 'circle', x: L.grandstand2.x - Math.sin(L.grandstand2.rot) * 6, z: L.grandstand2.z - Math.cos(L.grandstand2.rot) * 6, r: 24, island: idx('pit') },
     { shape: 'circle', x: L.tower.x, z: L.tower.z, r: 15, island: idx('tower') },
     { shape: 'circle', x: L.flames.x, z: L.flames.z, r: 25, island: idx('east') },
     { shape: 'rect', ...L.oldCity, island: idx('oldcity') },
