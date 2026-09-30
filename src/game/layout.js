@@ -4,7 +4,7 @@
 
 import * as THREE from 'three';
 import { Path } from './path.js';
-import { TEAMS } from '../data.js';
+import { GRID } from '../data.js';
 
 const v = (x, z) => new THREE.Vector3(x, 0, z);
 
@@ -29,8 +29,8 @@ export const TRACK_POINTS = [
 ];
 
 // Garage slots along the pit building, one per team, west to east.
-export const GARAGE_X = [-26, -13, 0, 13, 26];
-export const garageX = (teamId) => GARAGE_X[TEAMS.findIndex((t) => t.id === teamId)];
+export const GARAGE_X = [-25.5, -8.5, 8.5, 25.5];
+export const garageX = (teamId) => GARAGE_X[GRID.findIndex((t) => t.id === teamId)];
 
 export function buildTrack() {
   return new Path(TRACK_POINTS, { closed: true });
@@ -57,4 +57,13 @@ export function buildPitLane(track) {
   pit.sIn = sIn;
   pit.sOut = sOut;
   return pit;
+}
+
+// Ground the paddock needs on whichever circuit is showing: the pit building
+// block, and a strip along the pit lane.
+export const PIT_ISLAND_RECT = { shape: 'rect', x0: -44, x1: 44, z0: GARAGE_FRONT_Z - GARAGE_DEPTH - 6, z1: -40 };
+export function pitLaneExtras(pit, island) {
+  const out = [];
+  for (let i = 0; i < pit.n; i += 3) out.push({ shape: 'circle', x: pit.pos[i].x, z: pit.pos[i].z, r: PIT_WIDTH / 2 + 5, island });
+  return out;
 }

@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import { buildTrack, buildPitLane, TRACK_WIDTH, GARAGE_X, PIT_Z } from '../src/game/layout.js';
+import { buildTrack, buildPitLane, TRACK_WIDTH, GARAGE_X, DECK_X, PIT_Z } from '../src/game/layout.js';
 import { crossed } from '../src/game/driving.js';
-import { TEAMS, DRIVERS, COMPOUNDS, HELMET_PATTERNS } from '../src/data.js';
+import { TEAMS, GRID, DRIVERS, COMPOUNDS, HELMET_PATTERNS } from '../src/data.js';
 
 const track = buildTrack();
 const pit = buildPitLane(track);
@@ -65,11 +65,12 @@ describe('crossed', () => {
 });
 
 describe('spec data', () => {
-  it('has five teams with two unique car numbers each', () => {
-    expect(TEAMS).toHaveLength(5);
+  it('races four teams, each with two unique car numbers', () => {
     const numbers = TEAMS.flatMap((t) => t.numbers);
-    expect(new Set(numbers).size).toBe(10);
-    expect(TEAMS.filter((t) => t.launch).map((t) => t.id)).toEqual(['solaris', 'nordlys']);
+    expect(new Set(numbers).size).toBe(numbers.length);
+    expect(GRID.map((t) => t.id)).toEqual(['solaris', 'nordlys', 'kestrel', 'ironbark']);
+    expect(GARAGE_X).toHaveLength(GRID.length);
+    expect(DECK_X).toHaveLength(GRID.length);
   });
 
   it('gives every roster driver a car number from their team and a shared helmet pattern', () => {

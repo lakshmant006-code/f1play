@@ -66,7 +66,7 @@ export const TEAMS = [
     accent: '#151515',
     numbers: [11, 30],
     motif: 'chevrons',
-    launch: false,
+    launch: true,
   },
   {
     id: 'ironbark',
@@ -76,7 +76,7 @@ export const TEAMS = [
     accent: '#B8893A',
     numbers: [6, 26],
     motif: 'pinstripes',
-    launch: false,
+    launch: true,
   },
   {
     id: 'meridian',
@@ -91,6 +91,8 @@ export const TEAMS = [
 ];
 
 export const teamById = (id) => TEAMS.find((t) => t.id === id);
+// The four teams racing: a garage, two cars, drivers and a full crew each.
+export const GRID = TEAMS.filter((t) => t.launch);
 
 // Helmet: base color + one of the 8 shared patterns + pattern color.
 export const DRIVERS = [

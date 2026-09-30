@@ -5,7 +5,7 @@
 
 import * as THREE from 'three';
 import { bevelBox, merge, rod } from '../geo.js';
-import { TEAMS } from '../data.js';
+import { GRID as TEAMS } from '../data.js';
 import { textTexture } from './world.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -13,12 +13,16 @@ const mat = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness
 
 export const PODIUM_HEIGHT = 7; // balcony floor height (m)
 
-export function buildRaisedPodium() {
+// brand: the name on the fascia and backdrop; palette 'dawn' swaps the navy
+// and white for Caspian Dawn's plum and sandstone.
+export function buildRaisedPodium({ brand = 'SKY CIRCUIT', palette = 'sky' } = {}) {
   const g = new THREE.Group();
   const H = PODIUM_HEIGHT;
   const W = 16;
-  const navy = mat('#16202E', { roughness: 0.55 });
-  const white = mat('#F2F0EB', { roughness: 0.35 });
+  const dawn = palette === 'dawn';
+  const navyHex = dawn ? '#2B2340' : '#16202E';
+  const navy = mat(navyHex, { roughness: 0.55 });
+  const white = mat(dawn ? '#E8D6B8' : '#F2F0EB', { roughness: 0.35 });
   const gold = new THREE.MeshStandardMaterial({ color: '#D6B24C', metalness: 0.85, roughness: 0.25 });
   const steel = new THREE.MeshStandardMaterial({ color: '#C9CED6', metalness: 0.7, roughness: 0.3 });
   const glass = new THREE.MeshPhysicalMaterial({ color: '#9fc3d6', roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.35, depthWrite: false, side: THREE.DoubleSide });
@@ -44,7 +48,7 @@ export function buildRaisedPodium() {
   const R = 26;
   const span = 2 * Math.asin((W / 2 + 0.2) / R);
   const zc = 3.0 + 1.3 - R; // arc apex at z = 4.3
-  const fasciaTex = brandStrip();
+  const fasciaTex = brandStrip(brand, navyHex);
   const fascia = new THREE.Mesh(new THREE.CylinderGeometry(R, R, 1.9, 48, 1, true, -span / 2, span), new THREE.MeshStandardMaterial({ map: fasciaTex, roughness: 0.45, side: THREE.DoubleSide }));
   fascia.position.set(0, H - 0.2, zc);
   fascia.castShadow = true;
@@ -106,10 +110,10 @@ export function buildRaisedPodium() {
   const BR = 10;
   const barc = 0.95;
   const bz = -4.6;
-  const back = new THREE.Mesh(new THREE.CylinderGeometry(BR, BR, 4.4, 40, 1, true, Math.PI - barc / 2, barc), new THREE.MeshStandardMaterial({ color: '#16202E', side: THREE.DoubleSide, roughness: 0.55 }));
+  const back = new THREE.Mesh(new THREE.CylinderGeometry(BR, BR, 4.4, 40, 1, true, Math.PI - barc / 2, barc), new THREE.MeshStandardMaterial({ color: navyHex, side: THREE.DoubleSide, roughness: 0.55 }));
   back.position.set(0, floorY + 2.2, bz + BR);
   back.castShadow = true;
-  const markTex = textTexture(['SKY CIRCUIT'], { w: 1024, h: 128, bg: '#16202E', fg: '#F4F5F7' });
+  const markTex = textTexture([brand], { w: 1024, h: 128, bg: navyHex, fg: '#F4F5F7' });
   const mark = new THREE.Mesh(new THREE.CylinderGeometry(BR - 0.05, BR - 0.05, 1.1, 40, 1, true, Math.PI - barc * 0.3, barc * 0.6), new THREE.MeshStandardMaterial({ map: markTex, side: THREE.BackSide, roughness: 0.5 }));
   mark.position.set(0, floorY + 3.1, bz + BR);
   mark.scale.x = -1;
@@ -166,22 +170,22 @@ export function buildRaisedPodium() {
   return g;
 }
 
-function brandStrip() {
+function brandStrip(brand, base) {
   const c = document.createElement('canvas');
   c.width = 2048;
   c.height = 128;
   const ctx = c.getContext('2d');
   const grad = ctx.createLinearGradient(0, 0, 2048, 0);
-  grad.addColorStop(0, '#16202E');
-  grad.addColorStop(0.5, '#1E3550');
-  grad.addColorStop(1, '#16202E');
+  grad.addColorStop(0, base);
+  grad.addColorStop(0.5, base === '#16202E' ? '#1E3550' : '#4A3560');
+  grad.addColorStop(1, base);
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, 2048, 128);
   ctx.fillStyle = '#F4F5F7';
   ctx.font = '900 64px Nunito, Arial, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ['SKY CIRCUIT', 'CHAMPIONS', 'SKY CIRCUIT', 'CHAMPIONS'].forEach((t, i) => ctx.fillText(t, 256 + i * 512, 66));
+  [brand, 'CHAMPIONS', brand, 'CHAMPIONS'].forEach((t, i) => ctx.fillText(t, 256 + i * 512, 66));
   ctx.fillStyle = '#D6B24C';
   for (let i = 0; i < 4; i++) {
     ctx.beginPath();

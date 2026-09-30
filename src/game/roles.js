@@ -50,7 +50,6 @@ export class RolePlay {
         'div',
         {},
         h('b', {}, ch.saved ? `#${ch.recipe.number} ${ch.recipe.name}` : 'No character yet'),
-        h('span', {}, ch.saved ? `${PRESETS[ch.recipe.preset]?.label || 'Custom'} look` : 'You will play as the default look.'),
         h('a', { href: '/creator/', class: 'play-edit' }, ch.saved ? '✏️ Edit character' : '✏️ Make your character')
       )
     );
@@ -58,10 +57,10 @@ export class RolePlay {
       'div',
       { class: 'place-list' },
       Object.entries(ROLES).map(([id, r]) =>
-        h('button', { class: 'place', 'aria-pressed': role === id ? 'true' : null, onclick: () => this.play(id, team) }, h('b', {}, `${r.icon} ${r.label}`), h('span', {}, r.blurb))
+        h('button', { class: 'place', 'aria-pressed': role === id ? 'true' : null, onclick: () => this.play(id, team) }, h('b', {}, `${r.icon} ${r.label}`))
       )
     );
-    g.ui.openModal(h('div', {}, h('h2', {}, 'Play as'), who, h('p', { class: 'play-label' }, 'Team'), teamRow, h('p', { class: 'play-label' }, 'Track (driver)'), g.trackPicker(), h('p', { class: 'play-label' }, 'Job'), roles, h('div', { class: 'row' }, h('button', { onclick: () => g.ui.closeModal() }, 'Cancel'))));
+    g.ui.openModal(h('div', {}, h('h2', {}, 'Play as'), who, h('p', { class: 'play-label' }, 'Team'), teamRow, h('p', { class: 'play-label' }, 'Track'), g.trackPicker(), h('p', { class: 'play-label' }, 'Job'), roles, h('div', { class: 'row' }, h('button', { onclick: () => g.ui.closeModal() }, 'Cancel'))));
   }
 
   play(role, team = this.game.teams.find((t) => t.launch)) {
@@ -71,8 +70,6 @@ export class RolePlay {
       return;
     }
     g.ui.closeModal();
-    // The crew jobs are on the Sky Circuit; the driver can take either track.
-    if (role !== 'driver' && g.world !== 'sky') g.setWorld('sky');
     const { recipe } = this.character();
     this.role = role;
     if (role === 'driver') this.playDriver(team, recipe);
