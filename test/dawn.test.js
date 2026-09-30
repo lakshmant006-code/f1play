@@ -95,3 +95,34 @@ describe('Caspian Dawn layout', () => {
     expect(track.at(track.nearestNear(CROSSING.clone(), lower - 10)).pos.y).toBeLessThan(1);
   });
 });
+
+describe('Caspian Dawn islands', () => {
+  it('puts every landmark on solid ground joined to its island', async () => {
+    const { buildIslandShapes } = await import('../src/world/circuit.js');
+    const { dawnExtras, DAWN_ISLAND_OPTS } = await import('../src/tracks/dawnLayout.js');
+    const pit = buildPitLane(track);
+    const islands = dawnIslandArcs(track);
+    const { outlines, onIsland } = buildIslandShapes(track, pit, dawnExtras(track, pit, islands), { islands, ...DAWN_ISLAND_OPTS });
+    // Inside the island's kept outline (not a dropped scrap of ground).
+    const inside = (poly, x, z) => {
+      let c = false;
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        const a = poly[i];
+        const b = poly[j];
+        if (a.y > z !== b.y > z && x < ((b.x - a.x) * (z - a.y)) / (b.y - a.y) + a.x) c = !c;
+      }
+      return c;
+    };
+    const onGround = (x, z) => onIsland(x, z) && outlines.some((o) => o.length > 8 && inside(o, x, z));
+    const L = DAWN_LANDMARKS;
+    const g = L.grandstand;
+    // Grandstand corners (it faces south, extends 15 m north) and its video screen off the west end.
+    for (const [dx, dz] of [[-g.len / 2, -3], [g.len / 2, -3], [-g.len / 2, 14], [g.len / 2, 14], [g.len / 2 + 8, 3]]) expect(onGround(g.x + dx, g.z + dz)).toBe(true);
+    expect(onGround(L.tower.x, L.tower.z)).toBe(true);
+    expect(onGround(L.flames.x, L.flames.z)).toBe(true);
+    expect(onGround(L.podium.x, L.podium.z)).toBe(true);
+    expect(onGround(L.keep.x, L.keep.z)).toBe(true);
+    // The paddock: the pit building's corners.
+    for (const [x, z] of [[-34, -60], [34, -60], [-34, -68], [34, -68]]) expect(onGround(x, z)).toBe(true);
+  });
+});

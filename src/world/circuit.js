@@ -347,7 +347,7 @@ function ribbonWall(frames, lateral, y0, y1) {
 // Covered grandstand: tiered concrete terraces with colored seat blocks,
 // aisles, a cantilevered roof on trusses and a video screen; a seated crowd of
 // little people (body + head, two instanced draw calls) that cheers.
-export function buildGrandstandHD({ len = 36 } = {}) {
+export function buildGrandstandHD({ len = 36, name = 'SKY CIRCUIT' } = {}) {
   const g = new THREE.Group();
   const { rows, rowD, rowH, base } = STAND;
   const terr = [];
@@ -446,7 +446,7 @@ export function buildGrandstandHD({ len = 36 } = {}) {
   // Video screen on legs beside the west end of the stand, set back from the
   // front so its legs and panel stay clear of the track (which bends close
   // around the east end).
-  const screenTex = textTexture(['SKY CIRCUIT', 'LIVE'], { w: 512, h: 256, bg: '#0E1B2B', fg: '#F4F5F7' });
+  const screenTex = textTexture([name, 'LIVE'], { w: 512, h: 256, bg: '#0E1B2B', fg: '#F4F5F7' });
   const screen = new THREE.Mesh(new THREE.PlaneGeometry(7, 3.6), new THREE.MeshStandardMaterial({ map: screenTex, emissive: '#ffffff', emissiveMap: screenTex, emissiveIntensity: 0.6 }));
   const sx = -len / 2 - 4.2;
   const sz = -3;

@@ -10,8 +10,8 @@ import { buildClouds, asphaltTexture, textTexture, fbm } from '../world/world.js
 import { buildGrandstandHD, buildStartGantry, buildIslandShapes, buildIslands } from '../world/circuit.js';
 import { buildRaisedPodium } from '../world/podium.js';
 import { buildDawnTower } from '../world/towers.js';
-import { buildPitLane, pitLaneExtras, PIT_ISLAND_RECT, PIT_WIDTH } from '../game/layout.js';
-import { buildDawnTrack, dawnFeatures, dawnWidth, dawnIslandArcs, DAWN_LANDMARKS, DAWN_WIDTH } from './dawnLayout.js';
+import { buildPitLane, PIT_WIDTH } from '../game/layout.js';
+import { buildDawnTrack, dawnFeatures, dawnWidth, dawnIslandArcs, dawnExtras, dawnLedge, DAWN_ISLAND_OPTS, DAWN_LANDMARKS, DAWN_WIDTH } from './dawnLayout.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const mat = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.85, ...o });
@@ -283,26 +283,12 @@ export class DawnCircuit {
 
     // Islands: small ones hugging the road, plus ground for the paddock,
     // grandstand, tower, flame towers, old city, waterfall ledge and podium.
-    const L = DAWN_LANDMARKS;
     const islands = dawnIslandArcs(this.track);
-    const idx = (id) => islands.findIndex((i) => i.id === id);
-    const wf = this.track.at(this.features.waterfall);
-    const len = Math.hypot(wf.tan.x, wf.tan.z);
-    const outward = V(-wf.tan.z / len, 0, wf.tan.x / len); // away from the old-city infield
-    this.ledge = wf.pos.clone().setY(0).addScaledVector(outward, DAWN_WIDTH / 2 + VERGE + 13);
-    this.ledgeOut = outward;
-    const g = L.grandstand;
-    const extras = [
-      { ...PIT_ISLAND_RECT, island: idx('pit') },
-      ...pitLaneExtras(this.pit, idx('pit')),
-      { shape: 'rect', x0: g.x - g.len / 2 - 5, x1: g.x + g.len / 2 + 5, z0: g.z - 8, z1: g.z + 15, island: idx('pit') },
-      { shape: 'circle', x: L.tower.x, z: L.tower.z, r: 15, island: idx('tower') },
-      { shape: 'circle', x: L.flames.x, z: L.flames.z, r: 25, island: idx('east') },
-      { shape: 'rect', ...L.oldCity, island: idx('oldcity') },
-      { shape: 'circle', x: this.ledge.x, z: this.ledge.z, r: 14, island: idx('waterfall') },
-      { shape: 'circle', x: L.podium.x + Math.sin(L.podium.rot) * 5, z: L.podium.z + Math.cos(L.podium.rot) * 5, r: 19, island: idx('podium') },
-    ];
-    const { outlines, onIsland } = buildIslandShapes(this.track, this.pit, extras, { islands, area: [-130, -100, 340, 490], margin: 13, clear: 5 });
+    const { ledge, out } = dawnLedge(this.track);
+    this.ledge = ledge;
+    this.ledgeOut = out;
+    const extras = dawnExtras(this.track, this.pit, islands);
+    const { outlines, onIsland } = buildIslandShapes(this.track, this.pit, extras, { islands, ...DAWN_ISLAND_OPTS });
     this.onIsland = onIsland;
     this.outlines = outlines;
     this.frames = buildFrames(this.track, this.width, onIsland);
@@ -676,7 +662,7 @@ export class DawnCircuit {
   buildLandmarks() {
     const g = this.venue;
     const L = DAWN_LANDMARKS;
-    this.grandstand = buildGrandstandHD({ len: L.grandstand.len });
+    this.grandstand = buildGrandstandHD({ len: L.grandstand.len, name: 'CASPIAN DAWN' });
     this.grandstand.position.set(L.grandstand.x, 0, L.grandstand.z);
     this.grandstand.rotation.y = L.grandstand.rot;
     this.tower = buildDawnTower();
