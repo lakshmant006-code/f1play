@@ -3,7 +3,7 @@
 
 import * as THREE from 'three';
 import { bevelBox, merge, tint, rod } from '../geo.js';
-import { PALETTE, TEAMS, SCENERY } from '../data.js';
+import { PALETTE, GRID, SCENERY } from '../data.js';
 import { TRACK_WIDTH, PIT_WIDTH, PIT_Z, PIT_WALL_Z, GARAGE_FRONT_Z, GARAGE_DEPTH, GARAGE_X } from '../game/layout.js';
 
 const mat = (color, opts = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.85, ...opts });
@@ -684,27 +684,82 @@ export function buildPitBuilding() {
   walls.push(bevelBox(x1 - x0 + 1, 0.5, GARAGE_DEPTH + 2.6, 0.12).translate(0, h + 0.25, (zf + zb) / 2 + 1.1));
   const dividers = [x0, ...GARAGE_X.slice(0, -1).map((x, i) => (x + GARAGE_X[i + 1]) / 2), x1];
   for (const x of dividers) walls.push(bevelBox(0.5, h, GARAGE_DEPTH, 0.05).translate(x, h / 2, (zf + zb) / 2));
-  // Upper floor (hospitality) with windows band.
-  walls.push(bevelBox(x1 - x0, 3.2, GARAGE_DEPTH - 2, 0.1).translate(0, h + 2.1, (zf + zb) / 2 - 1));
+  // Upper floor (hospitality): a glass curtain wall with slim vertical fins,
+  // set back under a thin roof slab that overhangs as a sunshade, with a
+  // roof terrace behind a glass balustrade and a crown sign.
+  const midZ = (zf + zb) / 2;
+  const upH = 3.4;
+  const upY = h + 0.5;
+  const faceZ = zf + 0.2; // curtain wall line (the garage fronts are below it)
+  walls.push(bevelBox(x1 - x0, upH, 0.3, 0.05).translate(0, upY + upH / 2, zb + 0.15)); // back wall
+  for (const x of [x0, x1]) walls.push(bevelBox(0.4, upH, GARAGE_DEPTH, 0.05).translate(x, upY + upH / 2, midZ));
+  walls.push(bevelBox(x1 - x0 + 3, 0.35, GARAGE_DEPTH + 3.4, 0.1).translate(0, upY + upH + 0.18, midZ + 1.3)); // roof slab
+  walls.push(bevelBox(x1 - x0 + 3, 0.7, 0.2, 0.05).translate(0, upY + upH + 0.7, zb - 0.3)); // parapet back
   const shell = new THREE.Mesh(merge(walls), canopy);
   shell.castShadow = true;
   shell.receiveShadow = true;
   g.add(shell);
-  const glass = new THREE.Mesh(bevelBox(x1 - x0 - 1, 1.6, 0.1, 0.03).translate(0, h + 2.2, (zf + zb) / 2 + GARAGE_DEPTH / 2 - 0.95), new THREE.MeshStandardMaterial({ color: '#3b6f8f', roughness: 0.1, metalness: 0.6 }));
+  const curtain = new THREE.MeshPhysicalMaterial({ color: '#2f5673', roughness: 0.06, metalness: 0.55, clearcoat: 1, envMapIntensity: 1.4 });
+  const glass = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0 - 0.6, upH - 0.1, 0.08).translate(0, upY + upH / 2, faceZ), curtain);
   g.add(glass);
-  // Sky Circuit mark on the roof front.
-  const markTex = textTexture(['SKY CIRCUIT'], { w: 1024, h: 96, bg: '#0E1B2B', fg: '#F4F5F7' });
-  const mark = new THREE.Mesh(new THREE.PlaneGeometry(22, 2.06), new THREE.MeshStandardMaterial({ map: markTex, roughness: 0.6 }));
-  mark.position.set(0, h + 2.2, (zf + zb) / 2 + GARAGE_DEPTH / 2 - 0.88);
-  g.add(mark);
+  const fins = [];
+  for (let x = x0 + 1.2; x < x1 - 0.6; x += 1.6) fins.push(bevelBox(0.1, upH, 0.55, 0.02).translate(x, upY + upH / 2, faceZ + 0.3));
+  fins.push(bevelBox(x1 - x0, 0.12, 0.6, 0.02).translate(0, upY + 0.06, faceZ + 0.3));
+  const finMesh = new THREE.Mesh(merge(fins), mat('#E8EBEF', { roughness: 0.3, metalness: 0.5 }));
+  finMesh.castShadow = true;
+  g.add(finMesh);
+  // Warm light inside the hospitality floor.
+  const inside = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0 - 1, upH - 0.6).translate(0, upY + upH / 2, faceZ - 1.2), new THREE.MeshStandardMaterial({ color: '#fff3e0', emissive: '#ffe2b8', emissiveIntensity: 0.55, roughness: 0.9 }));
+  g.add(inside);
+  // Roof terrace balustrade and sunshade blades.
+  const terrace = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0 + 2.6, 1.05, 0.05).translate(0, upY + upH + 0.9, midZ + GARAGE_DEPTH / 2 + 2.8), new THREE.MeshPhysicalMaterial({ color: '#bfe3f7', roughness: 0.05, transparent: true, opacity: 0.35, depthWrite: false }));
+  g.add(terrace);
+  const blades = [];
+  for (let x = x0 + 2; x <= x1 - 2; x += 4) blades.push(bevelBox(0.18, 0.08, 3.2, 0.02).translate(x, upY + upH + 2.4, midZ + GARAGE_DEPTH / 2 + 1.2));
+  blades.push(bevelBox(x1 - x0, 0.12, 0.12, 0.02).translate(0, upY + upH + 2.4, midZ + GARAGE_DEPTH / 2 + 2.8), bevelBox(x1 - x0, 0.12, 0.12, 0.02).translate(0, upY + upH + 2.4, midZ + GARAGE_DEPTH / 2 - 0.4));
+  for (let x = x0 + 2; x <= x1 - 2; x += 8) blades.push(rod(new THREE.Vector3(x, upY + upH + 0.35, midZ + GARAGE_DEPTH / 2 + 2.8), new THREE.Vector3(x, upY + upH + 2.4, midZ + GARAGE_DEPTH / 2 + 2.8), 0.07, 8));
+  g.add(new THREE.Mesh(merge(blades), mat('#E8EBEF', { roughness: 0.3, metalness: 0.5 })));
+  // The circuit's name on the roof front (the game swaps it per circuit).
+  const brandMat = new THREE.MeshStandardMaterial({ roughness: 0.6 });
+  const setBrand = (name) => {
+    brandMat.map?.dispose();
+    brandMat.map = textTexture([name], { w: 1024, h: 96, bg: '#0E1B2B', fg: '#F4F5F7' });
+    brandMat.needsUpdate = true;
+  };
+  setBrand('SKY CIRCUIT');
+  const mark = new THREE.Mesh(new THREE.PlaneGeometry(22, 2.06), brandMat);
+  mark.position.set(0, upY + upH + 1.4, midZ + GARAGE_DEPTH / 2 + 2.85);
+  const markBack = new THREE.Mesh(bevelBox(22.6, 2.5, 0.3, 0.06).translate(0, upY + upH + 1.4, midZ + GARAGE_DEPTH / 2 + 2.65), mat('#0E1B2B', { roughness: 0.5 }));
+  g.add(markBack, mark);
+  g.userData.setBrand = setBrand;
+  // Garage door frames: a steel portal and a rolled-up door box on each opening.
+  const frames = [];
+  for (const x of GARAGE_X) {
+    for (const s of [-1, 1]) frames.push(bevelBox(0.35, h - 0.2, 0.4, 0.04).translate(x + s * 7, (h - 0.2) / 2, zf + 0.2));
+    frames.push(bevelBox(14.4, 0.5, 0.5, 0.06).translate(x, h - 0.45, zf + 0.25));
+    frames.push(bevelBox(13.8, 0.35, 0.35, 0.1).translate(x, h - 0.95, zf - 0.05));
+  }
+  // Piers between the garage openings.
+  const piers = [];
+  for (const x of dividers) piers.push(bevelBox(x === x0 || x === x1 ? 1.2 : 2.6, h, 0.6, 0.06).translate(x, h / 2, zf + 0.05));
+  const pierMesh = new THREE.Mesh(merge(piers), canopy);
+  pierMesh.castShadow = true;
+  g.add(pierMesh);
+  const frameMesh = new THREE.Mesh(merge(frames), mat('#2A2E35', { roughness: 0.4, metalness: 0.6 }));
+  frameMesh.castShadow = true;
+  g.add(frameMesh);
+  // Ceiling light panels in every garage.
+  const lights = [];
+  for (const x of GARAGE_X) for (const dx of [-3, 0, 3]) lights.push(new THREE.PlaneGeometry(1.8, 0.5).rotateX(Math.PI / 2).translate(x + dx, h - 0.05, midZ));
+  g.add(new THREE.Mesh(merge(lights), new THREE.MeshStandardMaterial({ color: '#ffffff', emissive: '#ffffff', emissiveIntensity: 1.2 })));
 
   // Per-team garage interiors: floor, back wall in team color, name header.
-  TEAMS.forEach((t, i) => {
+  GRID.forEach((t, i) => {
     const x = GARAGE_X[i];
     const inner = new THREE.Group();
-    const floor = new THREE.Mesh(bevelBox(12, 0.06, GARAGE_DEPTH - 0.4, 0.02).translate(0, 0.03, (zf + zb) / 2), mat('#d9dbe0', { roughness: 0.4 }));
+    const floor = new THREE.Mesh(bevelBox(16.4, 0.06, GARAGE_DEPTH - 0.4, 0.02).translate(0, 0.03, (zf + zb) / 2), mat('#d9dbe0', { roughness: 0.4 }));
     floor.receiveShadow = true;
-    const back = new THREE.Mesh(new THREE.PlaneGeometry(12, h - 0.2).translate(0, h / 2, zb + 0.22), mat(t.primary, { roughness: 0.7 }));
+    const back = new THREE.Mesh(new THREE.PlaneGeometry(16.4, h - 0.2).translate(0, h / 2, zb + 0.22), mat(t.primary, { roughness: 0.7 }));
     const header = new THREE.Mesh(
       new THREE.PlaneGeometry(10, 1.1),
       new THREE.MeshStandardMaterial({ map: textTexture([t.name.toUpperCase()], { bg: t.primary, fg: t.secondary === '#F5FAFA' ? '#F5FAFA' : t.accent }), roughness: 0.6 })

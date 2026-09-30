@@ -4,6 +4,9 @@
 // Starts only after a user gesture, as browsers require.
 
 import * as THREE from 'three';
+import { gearOf } from './drive.js';
+
+const UNLOCK_EVENTS = ['pointerdown', 'touchend', 'click', 'keydown'];
 
 export class SoundScape {
   constructor(game) {
@@ -11,16 +14,40 @@ export class SoundScape {
     this.ctx = null;
     this.muted = false;
     this.cars = new Map();
+    // Phones and iPads only let a page make sound from inside a tap, and iOS
+    // mutes Web Audio with the silent switch unless the page asks to play
+    // like a media app. So: ask for playback, and start (or wake) the audio on
+    // every touch, click or key until it is running.
+    try {
+      if (navigator.audioSession) navigator.audioSession.type = 'playback';
+    } catch {
+      /* not supported */
+    }
+    const unlock = () => {
+      this.start();
+      if (this.ctx?.state === 'running') for (const ev of UNLOCK_EVENTS) window.removeEventListener(ev, unlock, true);
+    };
+    for (const ev of UNLOCK_EVENTS) window.addEventListener(ev, unlock, { capture: true, passive: true });
+    // Coming back to the tab (or unlocking the phone) can leave it suspended.
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && this.ctx?.state !== 'running') this.ctx?.resume?.().catch(() => {});
+    });
   }
 
   start() {
     if (this.ctx) {
-      if (this.ctx.state === 'suspended') this.ctx.resume();
+      if (this.ctx.state !== 'running') this.ctx.resume().catch(() => {});
       return;
     }
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
-    const ctx = (this.ctx = new AC());
+    const ctx = (this.ctx = new AC({ latencyHint: 'interactive' }));
+    // iOS: a silent one-sample buffer played inside the tap unlocks output.
+    const blip = ctx.createBufferSource();
+    blip.buffer = ctx.createBuffer(1, 1, 22050);
+    blip.connect(ctx.destination);
+    blip.start(0);
+    if (ctx.state !== 'running') ctx.resume().catch(() => {});
     this.master = ctx.createGain();
     this.master.gain.value = this.muted ? 0 : 0.55;
     this.master.connect(ctx.destination);
@@ -67,7 +94,7 @@ export class SoundScape {
     const g = ctx.createGain();
     g.gain.value = 0;
     const pan = ctx.createPanner();
-    pan.panningModel = 'HRTF';
+    pan.panningModel = matchMedia('(pointer: coarse)').matches ? 'equalpower' : 'HRTF'; // HRTF is heavy on phones
     pan.distanceModel = 'inverse';
     pan.refDistance = 6;
     pan.rolloffFactor = 1.4;
@@ -76,9 +103,40 @@ export class SoundScape {
     lp.connect(g).connect(pan).connect(this.master);
     o1.start();
     o2.start();
-    const v = { o1, o2, lp, g, pan };
+    // Shift cut: a second gain the engine note passes through, dipped for a
+    // moment on every gear change.
+    const cut = ctx.createGain();
+    g.disconnect();
+    g.connect(cut).connect(pan);
+    const v = { o1, o2, lp, g, pan, cut, gear: 0 };
     this.cars.set(car, v);
     return v;
+  }
+
+  // A gear change: the note cuts for a moment (upshift) or blips (downshift),
+  // with a short exhaust crackle, louder for your own car.
+  shift(v, up, mine) {
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    v.cut.gain.cancelScheduledValues(t);
+    v.cut.gain.setValueAtTime(1, t);
+    v.cut.gain.linearRampToValueAtTime(up ? 0.15 : 1.6, t + 0.025);
+    v.cut.gain.linearRampToValueAtTime(1, t + (up ? 0.09 : 0.14));
+    if (!mine) return;
+    const len = Math.floor(ctx.sampleRate * 0.12);
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() < 0.08 ? Math.random() * 2 - 1 : 0) * Math.pow(1 - i / len, 3);
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = up ? 1400 : 900;
+    bp.Q.value = 1.2;
+    const g = ctx.createGain();
+    g.gain.value = up ? 0.35 : 0.5;
+    src.connect(bp).connect(g).connect(this.master);
+    src.start();
   }
 
   // A rush of water (driving through the waterfall): a filtered noise burst.
@@ -127,10 +185,18 @@ export class SoundScape {
         if (!car.drive) continue;
         const v = this.voice(car);
         const speed = Math.abs(car.drive.v);
-        const f = 70 + speed * 11;
-        v.o1.frequency.setTargetAtTime(f, t, 0.05);
-        v.o2.frequency.setTargetAtTime(f * 1.505, t, 0.05);
-        v.lp.frequency.setTargetAtTime(600 + speed * 60, t, 0.1);
+        // Engine note follows the revs: it climbs through each gear, then
+        // drops as the next gear goes in (with a cut and a crackle).
+        const { gear, rpm } = gearOf(car.drive.v);
+        const f = 62 + (0.3 + 0.7 * rpm) * 210 + gear * 9;
+        v.o1.frequency.setTargetAtTime(f, t, 0.03);
+        v.o2.frequency.setTargetAtTime(f * 1.505, t, 0.03);
+        v.lp.frequency.setTargetAtTime(700 + rpm * 2600 + gear * 120, t, 0.05);
+        if (gear !== v.gear) {
+          const up = gear > v.gear;
+          if (v.gear && gear) this.shift(v, up, car.drive === this.game.player);
+          v.gear = gear;
+        }
         const on = active && speed > 0.5 && car.root.visible ? 0.05 + Math.min(0.12, speed / 250) : 0;
         v.g.gain.setTargetAtTime(on, t, 0.08);
         const p = car.root.position;

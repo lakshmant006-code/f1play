@@ -8,7 +8,7 @@
 
 import * as THREE from 'three';
 import { bevelBox, merge, tint, rod } from '../geo.js';
-import { PALETTE, TEAMS } from '../data.js';
+import { PALETTE, GRID as TEAMS } from '../data.js';
 import { TRACK_WIDTH } from '../game/layout.js';
 import { buildIsland, textTexture } from './world.js';
 
@@ -25,12 +25,14 @@ export const ISLANDS = [
 ];
 export const BRIDGES = [[138, 178], [228, 262], [312, 340], [384, 412]];
 
-// Landmark placement (world meters).
-export const LANDMARKS = {
+// Landmark placement (world meters) on the Sky Circuit. LANDMARKS holds the
+// current circuit's (the game copies them in when it switches circuits).
+export const SKY_LANDMARKS = {
   grandstand: { x: 62, z: 0.5, rot: 0, len: 28 },
   tower: { x: -6, z: 26 },
   podium: { x: -92, z: 22, rot: Math.PI / 2 },
 };
+export const LANDMARKS = structuredClone(SKY_LANDMARKS);
 
 const inArc = (s, [a, b]) => s >= a && s <= b;
 
@@ -40,21 +42,44 @@ export const TOWER_H = 26;
 
 // ---- Island shapes from a ground mask ---------------------------------------------------
 
-export function buildIslandShapes(track, pit, extras) {
+// `islands` lists each island's arcs of the lap; `area` is the ground grid
+// (x0, z0, width, depth) and `margin` how far ground reaches from the road.
+export function buildIslandShapes(track, pit, extras, { islands = ISLANDS, area = [-130, -95, 260, 200], margin = 15.5, clear = 4 } = {}) {
   const CELL = 1.2;
-  const MARGIN = 15.5;
-  const CLEAR = 4; // sky channel between neighbouring islands
-  const x0 = -130;
-  const z0 = -95;
-  const W = Math.ceil(260 / CELL);
-  const H = Math.ceil(200 / CELL);
+  const MARGIN = margin;
+  const CLEAR = clear; // sky channel between neighbouring islands
+  const [x0, z0, aw, ah] = area;
+  const W = Math.ceil(aw / CELL);
+  const H = Math.ceil(ah / CELL);
   // Track samples every 2 m tagged with their owner (-1 = bridge).
   const samples = [];
   for (let s = 0; s < track.length; s += 2) {
     const p = track.at(s).pos;
-    const owner = ISLANDS.findIndex((isl) => isl.arcs.some((a) => inArc(s, a)));
+    const owner = islands.findIndex((isl) => isl.arcs.some((a) => inArc(s, a)));
     samples.push({ x: p.x, z: p.z, owner });
   }
+  // Only samples within MARGIN + CLEAR of a cell can decide it, so bucket
+  // them on a coarse grid and look in the 3 x 3 buckets around each cell.
+  const R = MARGIN + CLEAR;
+  const buckets = new Map();
+  const bkey = (bx, bz) => bx * 100003 + bz;
+  for (const sm of samples) {
+    const k = bkey(Math.floor(sm.x / R), Math.floor(sm.z / R));
+    if (!buckets.has(k)) buckets.set(k, []);
+    buckets.get(k).push(sm);
+  }
+  const near = [];
+  const gather = (x, z) => {
+    near.length = 0;
+    const bx = Math.floor(x / R);
+    const bz = Math.floor(z / R);
+    for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) {
+      const list = buckets.get(bkey(bx + dx, bz + dz));
+      if (list) for (const sm of list) near.push(sm);
+    }
+    return near;
+  };
+  const boxes = extras.map((e) => (e.shape === 'rect' ? e : { ...e, x0: e.x - e.r, x1: e.x + e.r, z0: e.z - e.r, z1: e.z + e.r, r2: e.r * e.r }));
   const owners = new Int8Array(W * H).fill(-1);
   for (let j = 0; j < H; j++) {
     for (let i = 0; i < W; i++) {
@@ -62,8 +87,9 @@ export function buildIslandShapes(track, pit, extras) {
       const z = z0 + j * CELL;
       // Explicit extras (pit building, landmarks) win.
       let owner = -1;
-      for (const e of extras) {
-        if (e.shape === 'rect' ? x >= e.x0 && x <= e.x1 && z >= e.z0 && z <= e.z1 : Math.hypot(x - e.x, z - e.z) <= e.r) {
+      for (const e of boxes) {
+        if (x < e.x0 || x > e.x1 || z < e.z0 || z > e.z1) continue;
+        if (e.shape === 'rect' || (x - e.x) * (x - e.x) + (z - e.z) * (z - e.z) <= e.r2) {
           owner = e.island;
           break;
         }
@@ -72,7 +98,7 @@ export function buildIslandShapes(track, pit, extras) {
         let best = Infinity;
         let bestOwner = -1;
         let other = Infinity;
-        for (const sm of samples) {
+        for (const sm of gather(x, z)) {
           const d = (sm.x - x) * (sm.x - x) + (sm.z - z) * (sm.z - z);
           if (d < best) {
             if (sm.owner !== bestOwner) other = Math.min(other, best);
@@ -88,7 +114,7 @@ export function buildIslandShapes(track, pit, extras) {
     }
   }
   const at = (i, j) => (i < 0 || j < 0 || i >= W || j >= H ? -1 : owners[j * W + i]);
-  const outlines = ISLANDS.map((_, k) => contour(W, H, (i, j) => at(i, j) === k, x0, z0, CELL));
+  const outlines = islands.map((_, k) => contour(W, H, (i, j) => at(i, j) === k, x0, z0, CELL));
   const onIsland = (x, z) => at(Math.round((x - x0) / CELL), Math.round((z - z0) / CELL)) >= 0;
   return { outlines, onIsland };
 }
@@ -158,12 +184,12 @@ export function contour(W, H, inside, x0, z0, cell) {
   return pts.filter((_, i) => i % 3 === 0);
 }
 
-export function buildIslands(outlines) {
+export function buildIslands(outlines, islands = ISLANDS, seed0 = 3) {
   const g = new THREE.Group();
   outlines.forEach((o, k) => {
     if (o.length < 8) return;
-    const isl = buildIsland(o, { depth: ISLANDS[k].depth, seed: 3 + k * 7 });
-    isl.userData.islandId = ISLANDS[k].id;
+    const isl = buildIsland(o, { depth: islands[k].depth, seed: seed0 + k * 7 });
+    isl.userData.islandId = islands[k].id;
     // Label anchor at the island's centre.
     const c = o.reduce((a, p) => a.add(p), new THREE.Vector2()).multiplyScalar(1 / o.length);
     const anchor = new THREE.Object3D();
@@ -601,7 +627,7 @@ export function buildWatchTower() {
 // ---- Start light gantry and trackside boards ------------------------------------------------
 
 // Five-light start gantry spanning the straight.
-export function buildStartGantry(x, z) {
+export function buildStartGantry(x, z, name = 'SKY CIRCUIT') {
   const g = new THREE.Group();
   const steel = mat('#2B2F36', { metalness: 0.5, roughness: 0.4 });
   const span = TRACK_WIDTH + 3;
@@ -620,7 +646,7 @@ export function buildStartGantry(x, z) {
     l2.position.y = 6.4;
     g.add(pod, l1, l2);
   }
-  const banner = new THREE.Mesh(new THREE.PlaneGeometry(span - 2, 0.9), new THREE.MeshStandardMaterial({ map: textTexture(['SKY CIRCUIT'], { w: 1024, h: 96, bg: '#0E1B2B', fg: '#F4F5F7' }), side: THREE.DoubleSide }));
+  const banner = new THREE.Mesh(new THREE.PlaneGeometry(span - 2, 0.9), new THREE.MeshStandardMaterial({ map: textTexture([name], { w: 1024, h: 96, bg: '#0E1B2B', fg: '#F4F5F7' }), side: THREE.DoubleSide }));
   banner.rotation.y = Math.PI / 2;
   banner.position.set(0.45, 7.6, 0);
   banner.material.side = THREE.FrontSide;

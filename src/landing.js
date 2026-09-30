@@ -3,7 +3,7 @@
 // "Play as guest" skips it. Afterwards a profile chip in the top bar shows who
 // is playing and signs out (which brings the landing screen back).
 
-import { TEAMS } from './data.js';
+import { GRID as TEAMS } from './data.js';
 import { h } from './ui/ui.js';
 import { icon } from './ui/icons.js';
 import { loadRecipe } from './character/recipe.js';
@@ -160,9 +160,7 @@ export function initLanding(game) {
         { class: 'landing-card' },
         h('div', { class: 'landing-brand' }, h('span', { class: 'mark', 'aria-hidden': 'true' }), 'Sky Circuit'),
         h('h1', { id: 'landing-title' }, 'Race above the clouds'),
-        h('p', { class: 'landing-tag' }, 'Drive, drift, run a 2.4 s pit stop and celebrate on the podium, on four floating islands.'),
         welcome || form,
-        h('p', { class: 'landing-note' }, 'Your profile is kept on this device.')
       )
     );
     root.append(el);

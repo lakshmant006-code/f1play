@@ -93,10 +93,22 @@ Covers build-order steps 1 to 3 and most of 4 and 5 from the spec:
 - **Rotate the islands**: drag to orbit all the way round, from nearly level to
   overhead (8° to 85°), and scroll or pinch to zoom. The ↺ ↻ ▲ ▼ buttons step
   the view, ⟳ Auto turns it like a turntable, and ⌂ resets it.
-- **Island switcher** (bottom left): look round the Sky Circuit islands or the
-  Caspian Dawn islands on the main page, orbiting and zooming as usual. Drive
-  picks the track you are looking at; pit stops, the podium, walking in, rain
-  and the crew jobs bring you back to the Sky Circuit.
+- **Island switcher** (bottom left): show the Sky Circuit or Caspian Dawn.
+  Everything works on both: the teams, pit stops, the pit wall, driving,
+  walking in, the watch tower, the podium and rain.
+- **Four teams**: Solaris, Nordlys, Kestrel and Ironbark, each with a garage,
+  two cars (one lapping, one to drive), two drivers, a race engineer,
+  strategist, team principal, mechanics and an 11-person pit crew, and a stand
+  on the pit wall.
+- **Architecture**: one shared paddock (pit building, garages, pit wall, the
+  teams and crews) and one venue per circuit (`src/tracks/sky.js`,
+  `src/tracks/dawnWorld.js`: islands, road, bridges, grandstand, tower,
+  podium, sky and light). Both circuits put their pit straight in the same
+  place, so switching swaps the venue, the light and the cars' paths.
+- **Sound**: an engine note per car that climbs through each gear, cuts on
+  upshifts and blips on downshifts (with a crackle for your own car), a
+  crowd bed, and splash and thud effects. On phones and iPads it starts on
+  the first tap and plays even with the silent switch on.
 - **Graphics**: multisampled antialiasing through the post-processing chain,
   a light sharpening pass, only a whisper of tilt-shift blur, soft shadows,
   full anisotropic texture filtering, and a resolution that adapts to the
@@ -107,18 +119,17 @@ Covers build-order steps 1 to 3 and most of 4 and 5 from the spec:
   - **Two tracks**: the Drive menu (and the driver job in *Play as*) lets you
     pick the track. Track 1 is the Sky Circuit. Track 2, **Caspian Dawn**, is
     a street circuit inspired by Baku, at dawn (`/?track=dawn` drives it
-    straight away). It is a 1.65 km figure of eight on two floating islands:
-    the high cable-stayed bridge (9 m up) carries the track over the low arch
-    bridge, so the lap passes under itself in the channel between them. The
-    west island is the old city: a narrow climb along crenellated walls to a
-    horseshoe at the top, then down through a rock arch where a waterfall
-    pours across the road (spray, water on the lens, wet grip for a few
-    meters). The east island has the boulevard straight with palms, a
-    grandstand, flame towers and the DRS zone: detection and zone gantries
-    whose panels turn green, painted lines and letters, and LED strips on
-    the barrier tops (amber when DRS is available, a green chase when it is
-    open, with speed streaks on screen). Roads climb and fall, with gravity
-    along the slope, and each track keeps its own best lap.
+    straight away): a 1.36 km figure of eight over small floating islands.
+    A cable-stayed viaduct (9 m up) crosses the low arch bridge in open sky,
+    so the lap passes under itself. The old city island has a narrow climb
+    along crenellated walls to a horseshoe at the top, a stone keep and a
+    minaret; beside the descent a spring runs to the island's edge and falls
+    off it into the clouds (scenery, clear of the road). The flame towers,
+    watch tower and podium stand on their own islands; the DRS zone runs down
+    the pit straight (detection and zone gantries whose panels turn green,
+    painted lines and letters, barrier-top LEDs, speed streaks on screen).
+    Roads climb and fall, with gravity along the slope, and each track keeps
+    its own best lap.
   - **Cockpit view** like an F1 onboard shot: the halo and centre pillar, and a
     steering wheel that turns with the front wheels. Its screen shows gear,
     speed and lap time, with rev LEDs and buttons.

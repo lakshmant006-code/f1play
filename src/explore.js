@@ -4,6 +4,7 @@
 // to the observation deck, and walk the track and bridges, but not off an island.
 
 import * as THREE from 'three';
+import { GRID } from './data.js';
 import { LANDMARKS, STAND, TOWER_H } from './world/circuit.js';
 import { PODIUM_HEIGHT } from './world/podium.js';
 import { GARAGE_X, GARAGE_FRONT_Z, GARAGE_DEPTH, PIT_WALL_Z, DECK_X, DECK_Z, DECK_W, DECK_D, DECK_H, TRACK_WIDTH } from './game/layout.js';
@@ -63,8 +64,7 @@ export const PLACES = {
     blurb: 'Walk the pit lane past all five garages. Mind the cars.',
     spawn: () => ({ x: GARAGE_X[0] + 4, y: 0, z: GARAGE_FRONT_Z + 1.3, yaw: yawTo(0, 0, 1, 0.35) }),
     views: [
-      { label: 'Solaris garage', go: () => ({ x: GARAGE_X[0] + 2.8, y: 0, z: GARAGE_FRONT_Z - 1, yaw: yawTo(0, 0, -0.5, -1) }) },
-      { label: 'Nordlys garage', go: () => ({ x: GARAGE_X[1] + 2.8, y: 0, z: GARAGE_FRONT_Z - 1, yaw: yawTo(0, 0, -0.5, -1) }) },
+      ...GRID.map((t, i) => ({ label: `${t.name.split(' ')[0]} garage`, go: () => ({ x: GARAGE_X[i] + 2.8, y: 0, z: GARAGE_FRONT_Z - 1, yaw: yawTo(0, 0, -0.5, -1) }) })),
       { label: 'Pit wall', go: () => ({ x: DECK_X[1] + 0.9, y: DECK_H, z: DECK_Z - 0.9, yaw: yawTo(0, 0, 0, 1) }) },
       { label: 'Start line', go: () => ({ x: -16, y: 0, z: -35 + TRACK_WIDTH / 2 + 1.5, yaw: yawTo(0, 0, 1, -0.1) }) },
     ],
@@ -243,7 +243,7 @@ export class Explorer {
       g.ui.hideCard();
       g.ui.back.hidden = true;
       g.audio?.start();
-      g.ui.toast(`<b>${place.name}.</b> ${place.blurb}`, { icon: '🚶', duration: 4500 });
+      g.ui.toast(`<b>${place.name}</b>`, { icon: '🚶', duration: 2000 });
     };
     // Swoop down toward the spot, then hand over to walking.
     g.focusView(V(spot.x, spot.y + 1, spot.z), { distance: 14, elevation: 18, azimuth: spot.yaw, minEl: 5 });

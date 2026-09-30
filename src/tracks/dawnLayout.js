@@ -1,11 +1,14 @@
-// Caspian Dawn: a street circuit inspired by Baku, on two floating islands in a
-// dawn sky. The lap is a figure of eight: the high bridge carries the track
-// from the east island to the west one, straight over the low bridge that
-// brings it back, so the track passes under itself in the channel between them.
-//   east island  long boulevard straight (DRS), flame towers, start / finish
-//   west island  old city: a narrow climb along the walls, the horseshoe at the
-//                top, and a rock arch with a waterfall on the way back down
-// Units are meters, +Y up. The road height is part of the path.
+// Caspian Dawn: a street circuit inspired by Baku, at dawn, on small floating
+// islands. It shares the Sky Circuit's paddock: the last corner, the start /
+// finish straight and the pit lane sit exactly where the Sky Circuit's do, so
+// the same garages, pit wall and crews serve both tracks.
+//
+// The lap is a figure of eight. From the pit straight (south) it runs up the
+// east side and onto a long viaduct over open sky, which crosses high above
+// the low bridge that brings the lap back. The north islands are the old city:
+// a narrow climb along the walls, the horseshoe at the top, and the descent
+// through a waterfall arch.
+// Units are meters, +Y up, +Z north (the infield side of the pit straight).
 
 import * as THREE from 'three';
 import { Path } from '../game/path.js';
@@ -14,30 +17,26 @@ const v = (x, y, z) => new THREE.Vector3(x, y, z);
 
 export const DAWN_WIDTH = 12;
 export const CASTLE_WIDTH = 9; // the old city squeeze
-export const GAP = 30; // half width of the sky channel between the islands
+export const CROSSING = v(60, 0, 150); // where the viaduct passes over the low bridge
 
-// Closed loop, starting on the start / finish line of the boulevard straight.
+// Closed loop, starting on the pit straight like the Sky Circuit.
 export const DAWN_POINTS = [
-  // East island: the boulevard straight, south.
-  v(200, 0, -10), v(200, 0, 60), v(200, 0, 130),
-  // Turn 1 and the sweep west.
-  v(192, 0, 178), v(165, 0, 200), v(128, 0, 200),
-  // Up the ramp to the high bridge, north west.
-  v(100, 0.4, 170), v(76, 2.8, 120), v(52, 6.2, 70), v(24, 8.6, 24),
-  v(0, 9, 0),
-  v(-24, 8.6, -24), v(-52, 6.2, -52), v(-80, 2.6, -82),
-  // West island: down onto the old city, then south along the walls, climbing.
-  v(-110, 0.4, -110), v(-145, 0, -120), v(-178, 0, -104),
-  v(-192, 0.6, -70), v(-186, 1.6, -40), v(-200, 2.6, -12), v(-196, 3.6, 20),
-  v(-196, 4.6, 60), v(-196, 5, 100),
-  // The horseshoe, at the top of the climb.
-  v(-193, 5, 132), v(-180, 5, 152), v(-160, 5, 160), v(-140, 5, 152), v(-127, 5, 132),
-  // Back down, through the waterfall arch.
-  v(-124, 4.2, 100), v(-124, 1.6, 60), v(-122, 0.2, 28),
-  v(-104, 0, 4), v(-76, 0, 2), v(-50, 0, 24),
-  // The low bridge, north east under the high one, back to the east island.
-  v(-24, 0, 24), v(0, 0, 0), v(24, 0, -24),
-  v(52, 0, -52), v(84, 0, -86), v(122, 0, -112), v(164, 0, -114), v(192, 0, -84),
+  // Pit straight (shared with the Sky Circuit), then the boulevard run to turn 1.
+  v(-60, 0, -35), v(0, 0, -35), v(60, 0, -35), v(115, 0, -35),
+  // Turn 1 and the east side, north.
+  v(150, 0, -30), v(172, 0, -12), v(180, 0, 16), v(177, 0, 44),
+  // Up the ramp onto the viaduct, north west over the sky.
+  v(152, 0.6, 62), v(126, 2.2, 84), v(96, 5.6, 114), CROSSING.clone().setY(9), v(22, 6.4, 188), v(-6, 2.6, 216),
+  // Old city: down off the viaduct, then the narrow climb north along the walls.
+  v(-30, 0.4, 244), v(-46, 1.2, 272), v(-42, 2.6, 300), v(-50, 3.8, 326),
+  // The horseshoe at the top.
+  v(-40, 5, 352), v(-16, 5, 366), v(12, 5, 364), v(32, 5, 346),
+  // Down through the waterfall arch, east.
+  v(52, 4.4, 322), v(78, 3, 306), v(108, 1.4, 296), v(140, 0.2, 280), v(162, 0, 256),
+  // Round onto the low bridge, south west under the viaduct.
+  v(156, 0, 232), v(128, 0, 216), v(96, 0, 186), CROSSING.clone(), v(26, 0, 116),
+  // West side, back to the last corner (shared with the Sky Circuit).
+  v(-6, 0, 86), v(-36, 0, 60), v(-58, 0, 30), v(-60, 0, 8), v(-74, 0, -8), v(-80, 0, -24), v(-72, 0, -34),
 ];
 
 export function buildDawnTrack() {
@@ -47,17 +46,14 @@ export function buildDawnTrack() {
 // Distances along the lap for the named features, found from their positions.
 export function dawnFeatures(track) {
   const at = (x, y, z) => track.nearest(v(x, y, z));
-  const castle = [at(-192, 0.6, -70), at(-196, 5, 100)];
-  const horseshoe = [at(-196, 5, 110), at(-124, 4.6, 110)];
   return {
-    castle,
-    horseshoe,
-    waterfall: at(-124, 3, 82),
-    // DRS: detection before the last corner, the zone down the boulevard.
-    drsDetect: at(164, 0, -114),
-    drs: [[at(200, 0, -40), at(200, 0, 150)]],
-    highBridge: [at(52, 6.2, 70), at(-52, 6.2, -52)],
-    lowBridge: [at(-50, 0, 24), at(52, 0, -52)],
+    castle: [at(-30, 0.4, 244), at(-50, 3.8, 326)],
+    horseshoe: [at(-48, 4.6, 336), at(40, 4.8, 336)],
+    waterfall: at(78, 3, 306),
+    // DRS: detected at the last corner, open down the pit straight and boulevard.
+    drsDetect: at(-78, 0, -18),
+    drs: [[at(-40, 0, -35), at(118, 0, -35)]],
+    crossing: CROSSING.clone(),
   };
 }
 
@@ -69,4 +65,34 @@ export function dawnWidth(features) {
     const t = Math.min(1, Math.max(0, Math.min(s - a, b - s) / edge));
     return DAWN_WIDTH + (CASTLE_WIDTH - DAWN_WIDTH) * t;
   };
+}
+
+// Where the landmarks stand (same shape as the Sky Circuit's LANDMARKS).
+export const DAWN_LANDMARKS = {
+  grandstand: { x: 88, z: -12, rot: Math.PI, len: 34 }, // north of the straight, facing it
+  tower: { x: 70, z: 50 }, // its own island in the south infield
+  podium: { x: -18, z: 34, rot: -Math.PI * 0.8 }, // west island, facing the track
+  flames: { x: 136, z: 34 },
+  oldCity: { x0: -30, x1: 26, z0: 262, z1: 330 },
+  keep: { x: 8, z: 292 },
+};
+
+// Islands: stretches of the lap (between two points, in lap order) that sit on
+// ground; everything else is bridge over open sky.
+export const DAWN_ISLANDS = [
+  { id: 'pit', name: 'Pit island', from: v(-60, 0, 30), to: v(178, 0, 30), depth: 55 },
+  { id: 'east', name: 'Flame island', from: v(176, 0, 50), to: v(130, 2, 80), depth: 40 },
+  { id: 'oldcity', name: 'Old city', from: v(-14, 1.6, 226), to: v(40, 5, 336), depth: 50 },
+  { id: 'waterfall', name: 'Waterfall island', from: v(60, 4, 316), to: v(160, 0, 244), depth: 42 },
+  { id: 'podium', name: 'Podium island', from: v(4, 0, 96), to: v(-50, 0, 42), depth: 34 },
+  { id: 'tower', name: 'Watch tower island', from: null, to: null, depth: 40 },
+];
+
+export function dawnIslandArcs(track) {
+  return DAWN_ISLANDS.map((isl) => {
+    if (!isl.from) return { ...isl, arcs: [] };
+    const a = track.nearest(isl.from);
+    const b = track.nearest(isl.to);
+    return { ...isl, arcs: a <= b ? [[a, b]] : [[a, track.length], [0, b]] };
+  });
 }

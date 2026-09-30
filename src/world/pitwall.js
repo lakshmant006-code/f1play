@@ -45,7 +45,10 @@ export function buildPitWallDeck(team) {
   g.add(deskMesh);
 
   // Monitors: two per seat on the desk, one per seat hanging from the roof.
-  const screenMat = new THREE.MeshStandardMaterial({ color: '#0f1620', emissive: team.primary, emissiveIntensity: 0.35, roughness: 0.25 });
+  // Screens show live-looking timing: lap traces, sector bars and a map,
+  // tinted with the team color.
+  const screenTex = timingTexture(team.primary);
+  const screenMat = new THREE.MeshStandardMaterial({ color: '#ffffff', map: screenTex, emissive: '#ffffff', emissiveMap: screenTex, emissiveIntensity: 0.35, roughness: 0.25 });
   const bezels = [];
   const screens = [];
   for (let i = 0; i < SEATS; i++) {
@@ -96,16 +99,23 @@ export function buildPitWallDeck(team) {
     g.add(gl);
   }
 
-  // Stools.
+  // High chairs: a padded seat and a team-colored backrest on a steel column.
   const stools = [];
+  const backs = [];
   for (let i = 0; i < SEATS; i++) {
     const p = seatPos(i);
-    stools.push(new THREE.CylinderGeometry(0.2, 0.2, 0.08, 16).translate(p.x, p.y - 0.04, p.z));
-    stools.push(new THREE.CylinderGeometry(0.035, 0.035, SEAT_H - 0.08, 8).translate(p.x, DECK_H + (SEAT_H - 0.08) / 2, p.z));
-    stools.push(new THREE.CylinderGeometry(0.2, 0.22, 0.03, 16).translate(p.x, DECK_H + 0.02, p.z));
-    stools.push(new THREE.TorusGeometry(0.17, 0.015, 6, 16).rotateX(Math.PI / 2).translate(p.x, DECK_H + 0.3, p.z));
+    stools.push(new THREE.CylinderGeometry(0.22, 0.2, 0.09, 20).translate(p.x, p.y - 0.045, p.z));
+    stools.push(new THREE.CylinderGeometry(0.035, 0.035, SEAT_H - 0.08, 10).translate(p.x, DECK_H + (SEAT_H - 0.08) / 2, p.z));
+    stools.push(new THREE.CylinderGeometry(0.22, 0.24, 0.03, 20).translate(p.x, DECK_H + 0.02, p.z));
+    stools.push(new THREE.TorusGeometry(0.18, 0.015, 6, 20).rotateX(Math.PI / 2).translate(p.x, DECK_H + 0.3, p.z));
+    stools.push(rod(V(p.x, p.y, p.z - 0.2), V(p.x, p.y + 0.35, p.z - 0.24), 0.02, 6));
+    backs.push(bevelBox(0.4, 0.3, 0.06, 0.025).rotateX(-0.12).translate(p.x, p.y + 0.42, p.z - 0.25));
   }
   g.add(new THREE.Mesh(merge(stools), mat('#15161a', { roughness: 0.4, metalness: 0.3 })));
+  g.add(new THREE.Mesh(merge(backs), trim));
+  // A glowing team-colored strip under the roof edge, facing the track.
+  const glow = new THREE.Mesh(new THREE.BoxGeometry(W - 0.2, 0.05, 0.05).translate(0, DECK_H + 2.82, front + 0.25), new THREE.MeshStandardMaterial({ color: team.primary, emissive: team.primary, emissiveIntensity: 1.6 }));
+  g.add(glow);
 
   // Hoop railings along the pit lane side.
   const rails = [];
@@ -126,4 +136,45 @@ export function buildPitWallDeck(team) {
   });
   g.userData.screenMat = screenMat;
   return g;
+}
+
+// Timing screen art: dark panel, lap-time traces, sector bars and a track map.
+function timingTexture(color) {
+  const c = document.createElement('canvas');
+  c.width = 256;
+  c.height = 160;
+  const x = c.getContext('2d');
+  x.fillStyle = '#0b1018';
+  x.fillRect(0, 0, 256, 160);
+  x.strokeStyle = 'rgba(255,255,255,0.08)';
+  for (let i = 0; i < 256; i += 32) x.strokeRect(i, 0, 32, 160);
+  const trace = (col, seed, y0) => {
+    x.strokeStyle = col;
+    x.lineWidth = 2.5;
+    x.beginPath();
+    for (let i = 0; i <= 24; i++) {
+      const y = y0 + Math.sin(i * 0.9 + seed) * 10 + Math.sin(i * 0.37 + seed * 2) * 6;
+      i ? x.lineTo(i * 6 + 6, y) : x.moveTo(6, y);
+    }
+    x.stroke();
+  };
+  trace(color, 1, 48);
+  trace('#e8edf4', 3, 70);
+  trace('#35d45a', 5, 100);
+  ['#b25cff', '#35d45a', '#F5C518'].forEach((col, i) => {
+    x.fillStyle = col;
+    x.fillRect(10 + i * 50, 130, 44, 14);
+  });
+  x.strokeStyle = color;
+  x.lineWidth = 3;
+  x.beginPath();
+  x.ellipse(206, 60, 34, 22, 0.4, 0, Math.PI * 2);
+  x.stroke();
+  x.fillStyle = '#ffffff';
+  x.beginPath();
+  x.arc(230, 52, 4, 0, Math.PI * 2);
+  x.fill();
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
 }

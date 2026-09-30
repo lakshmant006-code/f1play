@@ -39,6 +39,16 @@ function loadTc() {
   }
 }
 
+// Gear and engine speed (0..1 within the gear) for a road speed; the HUD, the
+// wheel's LEDs and the engine sound all use it, so they shift together.
+export function gearOf(v) {
+  const f = Math.min(0.999, Math.abs(v) / (VMAX * 1.12));
+  if (Math.abs(v) < 0.3) return { gear: 0, rpm: 0.08 };
+  // Short low gears, long top gears, like a real box.
+  const x = Math.pow(f, 0.8) * GEARS;
+  return { gear: Math.min(GEARS, 1 + Math.floor(x)), rpm: x % 1 };
+}
+
 function loadBestLap(key = BEST_KEY) {
   try {
     return JSON.parse(localStorage.getItem(key) || 'null');
@@ -119,7 +129,7 @@ export class PlayerDrive {
   // circuit: where to drive (the Sky Circuit by default). It gives the path
   // (with road heights), the road width and wall limits, grip, DRS zones and
   // its own best lap, and may swap the scenery in (enter / exit / update).
-  start(team, circuit = this.game.homeCircuit) {
+  start(team, circuit = this.game.circuit) {
     const g = this.game;
     if (this.active) return;
     if (g.explorer?.active) g.explorer.exitQuiet();
@@ -187,7 +197,7 @@ export class PlayerDrive {
     this.setCam('cockpit');
     this.buildHud();
     g.audio?.start();
-    g.ui.toast(`<b>${d.data.name}'s car #${car.number}${circuit.name && circuit !== g.homeCircuit ? ` · ${circuit.name}` : ''}.</b> ${matchMedia('(pointer: coarse)').matches ? 'GAS to go, L / R to steer, DRIFT to slide, DRS on the straights.' : 'W or ↑ to go, A/D to steer, Shift to drift, Space for DRS, C for camera.'}`, { icon: '🏎', duration: 5000, accent: team.data.primary });
+    g.ui.toast(`<b>${d.data.name}'s car #${car.number}${circuit.name ? ` · ${circuit.name}` : ''}.</b> ${matchMedia('(pointer: coarse)').matches ? 'GAS to go, L / R to steer, DRIFT to slide, DRS on the straights.' : 'W or ↑ to go, A/D to steer, Shift to drift, Space for DRS, C for camera.'}`, { icon: '🏎', duration: 5000, accent: team.data.primary });
     this.place();
   }
 
@@ -197,6 +207,7 @@ export class PlayerDrive {
     const car = this.car;
     this.active = false;
     this.circuit?.exit?.();
+    g.applyLight(); // the shadow box goes back over the whole circuit
     g.interactions.enabled = true;
     document.body.classList.remove('walking', 'driving');
     this.hud?.remove();
@@ -224,9 +235,7 @@ export class PlayerDrive {
     g.camera.near = 0.5;
     g.camera.updateProjectionMatrix();
     const fwd = V(Math.sin(this.heading), 0, Math.cos(this.heading));
-    // Back from another circuit, the view starts from the home circuit's centre.
-    if (this.circuit === g.homeCircuit) g.rig.controls.target.copy(this.pos).addScaledVector(fwd, 10);
-    else g.rig.controls.target.set(0, 0, -5);
+    g.rig.controls.target.copy(this.pos).addScaledVector(fwd, 10);
     g.rig.controls.enabled = true;
     g.rig.frozen = false;
     g.goHome();
@@ -496,7 +505,6 @@ export class PlayerDrive {
     this.place();
     this.animate(dt, offTrack);
     this.updateHud();
-    C.update?.(dt, this);
   }
 
   // One physics step. State: position, heading, forward speed v and sideways
@@ -644,8 +652,9 @@ export class PlayerDrive {
     n.sprung.position.y = offTrack ? Math.sin(this.time * 40) * 0.01 * Math.min(1, Math.abs(this.v) / 10) : 0;
     n.flapR.rotation.x = this.flap;
     car.setRainLight(this.game.rain && Math.floor(this.time * 8) % 2 === 0);
-    // Steering wheel turns with the front wheels (about 4x).
-    if (this.wheel) this.wheel.rotation.z = this.steer * 4;
+    // Steering wheel turns with the front wheels (about 4x). Its face points
+    // back at the driver, so a left turn is a negative spin about its axis.
+    if (this.wheel) this.wheel.rotation.z = -this.steer * 4;
     this.updateCamera(dt);
   }
 
@@ -679,9 +688,8 @@ export class PlayerDrive {
 
   updateHud() {
     const kmh = Math.round(Math.abs(this.v) * 3.6);
-    const f = Math.min(0.999, Math.abs(this.v) / (VMAX * 1.12));
-    const gear = this.v < -0.3 ? 'R' : Math.abs(this.v) < 0.3 ? 'N' : String(Math.min(GEARS, 1 + Math.floor(f * GEARS)));
-    const rpm = Math.abs(this.v) < 0.3 ? 0.08 : (f * GEARS) % 1;
+    const { gear: gearN, rpm } = gearOf(this.v);
+    const gear = this.v < -0.3 ? 'R' : Math.abs(this.v) < 0.3 ? 'N' : String(gearN);
     const lit = Math.round(rpm * 15);
     this.speedEl.textContent = kmh;
     this.gearEl.textContent = gear;

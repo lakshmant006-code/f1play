@@ -7,7 +7,7 @@ import { createCar } from '../car/car.js';
 import { createPerson, SKIN, HAIR } from '../people/person.js';
 import { Actor } from '../people/actor.js';
 import { bevelBox, merge, rod, tint } from '../geo.js';
-import { TEAMS, DRIVERS, surname, CORNERS } from '../data.js';
+import { GRID, DRIVERS, surname, CORNERS } from '../data.js';
 import { GARAGE_X, PIT_Z, GARAGE_FRONT_Z, DECK_X, DECK_Z } from './layout.js';
 import { buildPitWallDeck, seatPos } from '../world/pitwall.js';
 
@@ -72,7 +72,7 @@ function releaseBoxProp() {
 
 export function buildTeams(scene, { track, pit }) {
   const teams = [];
-  TEAMS.forEach((t, i) => {
+  GRID.forEach((t, i) => {
     const gx = GARAGE_X[i];
     const team = { data: t, gx, box: V(gx, 0, PIT_Z), cars: [], drivers: [], crew: {}, crewList: [], launch: t.launch };
     teams.push(team);

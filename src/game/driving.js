@@ -67,7 +67,7 @@ export class CarDriver {
     this.mode = 'parked';
     this.v = 0;
     this.car.root.position.copy(position);
-    this.car.root.rotation.set(0, heading, 0);
+    this.car.root.rotation.set(0, heading, 0, 'YXZ');
   }
 
   // Scripted move (crew push back into the garage, or rolling out of it).
@@ -166,8 +166,9 @@ export class CarDriver {
 
   place() {
     const p = this.path.at(this.s, this.smp);
-    this.car.root.position.set(p.pos.x, 0, p.pos.z);
-    this.car.root.rotation.set(0, Math.atan2(p.tan.x, p.tan.z), 0);
+    this.car.root.position.copy(p.pos); // roads climb and fall on some circuits
+    const flat = Math.hypot(p.tan.x, p.tan.z) || 1;
+    this.car.root.rotation.set(-Math.atan2(p.tan.y, flat), Math.atan2(p.tan.x, p.tan.z), 0, 'YXZ');
   }
 
   animateNodes(dt) {

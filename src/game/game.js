@@ -4,10 +4,11 @@
 // out, celebrate on the podium.
 
 import * as THREE from 'three';
-import { buildTrackMeshes, buildPitBuilding, buildClouds, buildSky } from '../world/world.js';
-import { buildRaisedPodium, PODIUM_HEIGHT } from '../world/podium.js';
-import { buildIslandShapes, buildIslands, buildBridges, buildGrandstandHD, buildWatchTower, buildStartGantry, buildTrackBoards, LANDMARKS } from '../world/circuit.js';
-import { buildTrack, buildPitLane, PIT_WIDTH, GARAGE_FRONT_Z, GARAGE_DEPTH } from './layout.js';
+import { buildPitBuilding } from '../world/world.js';
+import { PODIUM_HEIGHT } from '../world/podium.js';
+import { LANDMARKS } from '../world/circuit.js';
+import { GARAGE_FRONT_Z, GARAGE_DEPTH, PIT_Z } from './layout.js';
+import { buildSkyCircuit } from '../tracks/sky.js';
 import { buildTeams } from './paddock.js';
 import { CarDriver } from './driving.js';
 import { PitChallenge, loadBest } from './pitstop.js';
@@ -15,7 +16,7 @@ import { Interactions } from '../interact.js';
 import { Particles, Rain } from '../fx/particles.js';
 import { createPerson, SKIN, HAIR, attachProp, setHelmet } from '../people/person.js';
 import { Actor } from '../people/actor.js';
-import { COMPOUNDS, DRIVERS, teamById, driverByNumber, surname, PIT } from '../data.js';
+import { GRID, COMPOUNDS, DRIVERS, teamById, driverByNumber, surname, PIT } from '../data.js';
 import { h } from '../ui/ui.js';
 import { icon } from '../ui/icons.js';
 import { Explorer, PLACES } from '../explore.js';
@@ -24,7 +25,6 @@ import { PlayerDrive } from '../drive.js';
 import { EngineerMode } from './engineer.js';
 import { RolePlay } from './roles.js';
 import { DawnCircuit } from '../tracks/dawnWorld.js';
-import { TRACK_WIDTH } from './layout.js';
 import { buildCharacter, animateCharacter, setPose, loadRecipe, EMOTES, PRESETS, SUITS, GLOVES, BROWS, MOUTHS, SKINS, SWATCHES } from '../character/blocky.js';
 
 const WORLDS = [
@@ -37,13 +37,6 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const deg = THREE.MathUtils.degToRad;
 
-const TIPS = [
-  'Track temp is climbing. Softs will drop off after six laps, so plan the stop early.',
-  'Undercut window is open. Box this lap and we jump them in the pit lane.',
-  'Rain in ten minutes on the radar. Inters on standby.',
-  'Front left is the limiting tire. Save it through the long right hander.',
-  'Target 2.4 in the box. Every tenth is a place on track.',
-];
 
 export class Game {
   constructor({ renderer, scene, camera, post, rig, ui }) {
@@ -51,7 +44,7 @@ export class Game {
     this.time = 0;
     this.actors = [];
     this.drivers = [];
-    this.nextCompound = { solaris: 'soft', nordlys: 'soft' };
+    this.nextCompound = Object.fromEntries(GRID.map((t) => [t.id, 'soft']));
     this.rain = false;
     this.world = 'sky';
     this.focus = null;
@@ -61,17 +54,6 @@ export class Game {
     this.timers = [];
 
     this.buildWorld();
-    // The home circuit as the driving code sees it (Track 2 lives in tracks/).
-    this.homeCircuit = {
-      id: 'sky',
-      name: 'Sky Circuit',
-      track: this.track,
-      bestKey: 'skycircuit.bestLap',
-      pitWall: true,
-      bumps: true,
-      width: () => TRACK_WIDTH,
-      limit: (s, x, z) => (this.onIsland(x, z) ? TRACK_WIDTH / 2 + 4.8 : TRACK_WIDTH / 2 + 1.5),
-    };
     this.teams = buildTeams(scene, { track: this.track, pit: this.pit });
     this.setupCars();
     this.pitChallenge = new PitChallenge(this);
@@ -103,71 +85,100 @@ export class Game {
 
   // ---- World ---------------------------------------------------------------
 
+  // The world is a shared paddock (pit building, garages, pit wall, the four
+  // teams and their crews, the lights) plus one circuit venue at a time. Both
+  // circuits put their pit straight in the same place, so the paddock serves
+  // either; switching circuits swaps the venue, the light and the cars' paths.
   buildWorld() {
     const s = this.scene;
-    this.track = buildTrack();
-    this.pit = buildPitLane(this.track);
+    this.pitBuilding = buildPitBuilding();
+    s.add(this.pitBuilding);
 
-    // Four islands carved around the track, joined by track bridges.
-    const L = LANDMARKS;
-    const pitLaneExtras = [];
-    for (let i = 0; i < this.pit.n; i += 3) pitLaneExtras.push({ shape: 'circle', x: this.pit.pos[i].x, z: this.pit.pos[i].z, r: PIT_WIDTH / 2 + 5, island: 0 });
-    const extras = [
-      { shape: 'rect', x0: -44, x1: 44, z0: GARAGE_FRONT_Z - GARAGE_DEPTH - 6, z1: -40, island: 0 },
-      ...pitLaneExtras,
-      { shape: 'rect', x0: L.grandstand.x - L.grandstand.len / 2 - 9, x1: L.grandstand.x + L.grandstand.len / 2 + 9, z0: L.grandstand.z - 15, z1: L.grandstand.z + 5, island: 1 },
-      { shape: 'circle', x: L.tower.x, z: L.tower.z, r: 13, island: 2 },
-      { shape: 'rect', x0: L.podium.x - 14, x1: -67, z0: L.podium.z - 15, z1: L.podium.z + 15, island: 3 },
-    ];
-    const shapes = buildIslandShapes(this.track, this.pit, extras);
-    this.onIsland = shapes.onIsland;
-    this.islands = buildIslands(shapes.outlines);
-    s.add(this.islands);
-    s.add(buildTrackMeshes(this.track, this.pit, this.onIsland));
-    s.add(buildBridges(this.track, this.onIsland));
-    s.add(buildPitBuilding());
-    s.add(buildStartGantry(-10, -35));
-    s.add(buildTrackBoards(this.track, [[20, 110, 1], [190, 225, -1], [270, 305, 1], [345, 380, -1]], this.onIsland));
-
-    this.grandstand = buildGrandstandHD({ len: L.grandstand.len });
-    this.grandstand.position.set(L.grandstand.x, 0, L.grandstand.z);
-    this.grandstand.rotation.y = L.grandstand.rot;
-    s.add(this.grandstand);
-
-    this.tower = buildWatchTower();
-    this.tower.position.set(L.tower.x, 0, L.tower.z);
-    this.tower.rotation.y = Math.PI * 0.85; // timing board faces the pit straight side
-    s.add(this.tower);
-
-    this.podium = buildRaisedPodium();
-    this.podium.position.set(L.podium.x, 0, L.podium.z);
-    this.podium.rotation.y = L.podium.rot;
-    s.add(this.podium);
-
-    this.clouds = buildClouds();
-    s.add(this.clouds);
-    s.add(buildSky());
-
-    // Lights: one warm key with soft shadows, a sky fill.
+    // Lights: one warm key with soft shadows, a sky fill (tuned per circuit).
     this.hemi = new THREE.HemisphereLight('#F3EEE3', '#6B7A45', 1.05);
     s.add(this.hemi);
     const sun = new THREE.DirectionalLight('#FFE6C2', 2.6);
-    sun.position.set(110, 140, 90);
-    sun.target.position.set(0, 0, -5);
     sun.castShadow = true;
     sun.shadow.mapSize.set(4096, 4096);
-    const sc = sun.shadow.camera;
-    sc.left = -140;
-    sc.right = 140;
-    sc.top = 140;
-    sc.bottom = -140;
-    sc.near = 20;
-    sc.far = 420;
+    sun.shadow.camera.near = 20;
     sun.shadow.bias = -0.0003;
     sun.shadow.normalBias = 0.04;
     sun.shadow.radius = 3;
     s.add(sun, sun.target);
     this.sun = sun;
+
+    this.circuits = { sky: buildSkyCircuit() };
+    this.useCircuit(this.circuits.sky);
+  }
+
+  // Make a circuit the live one: its venue shows, the cars follow its paths,
+  // the walk-in places and landmarks point at its buildings, and its light is on.
+  useCircuit(c) {
+    if (this.circuit === c) return;
+    const old = this.circuit;
+    if (old) old.venue.visible = false;
+    if (!c.venue.parent) this.scene.add(c.venue);
+    c.venue.visible = true;
+    this.circuit = c;
+    this.world = c.id;
+    this.track = c.track;
+    this.pit = c.pit;
+    this.onIsland = c.onIsland;
+    this.islands = c.islands;
+    this.grandstand = c.grandstand;
+    this.tower = c.tower;
+    this.podium = c.podium;
+    this.clouds = c.clouds;
+    Object.assign(LANDMARKS, structuredClone(c.landmarks));
+    // Cars keep their place on the lap, as a share of its length.
+    for (const t of this.teams || []) {
+      for (const car of t.cars) {
+        const d = car.drive;
+        if (!(d instanceof CarDriver)) continue;
+        const oldLen = d.track.length;
+        d.track = c.track;
+        d.pit = c.pit;
+        if (d.mode === 'track' || d.mode === 'parade') {
+          d.s = (d.s / oldLen) * c.track.length;
+          d.place();
+        } else if (d.mode === 'pit' || d.mode === 'pit_exit') {
+          d.s = Math.min(d.s, c.pit.length - 0.1);
+          d.place();
+        }
+        if (d.pitRequest) d.boxS = c.pit.nearest(new THREE.Vector3(d.pitRequest.boxX, 0, PIT_Z));
+      }
+    }
+    this.pitBuilding.userData.setBrand(c.name.toUpperCase());
+    this.rig.home = c.home;
+    this.rig.controls.maxDistance = c.maxDistance;
+    this.applyLight();
+  }
+
+  // The circuit's light (and fog, sky tint, shadow box), dimmed in the rain.
+  applyLight() {
+    const L = this.circuit.light;
+    const wet = this.rain;
+    const scene = this.scene;
+    this.sun.color.set(L.sun);
+    this.sun.intensity = L.sunI * (wet ? 0.5 : 1);
+    this.hemi.color.set(L.sky);
+    this.hemi.groundColor.set(L.ground);
+    this.hemi.intensity = L.hemiI * (wet ? 0.72 : 1);
+    scene.fog.color.set(L.fog);
+    scene.fog.near = L.near;
+    scene.fog.far = L.far;
+    this.renderer.setClearColor(L.fog);
+    scene.environmentIntensity = L.env;
+    scene.environmentRotation.set(0, L.envRot, 0);
+    this.post.grade.uniforms.saturation.value = L.sat * (wet ? 0.86 : 1);
+    const sh = L.shadow;
+    const sc = this.sun.shadow.camera;
+    sc.left = sc.bottom = -sh.r;
+    sc.right = sc.top = sh.r;
+    sc.far = sh.far;
+    sc.updateProjectionMatrix();
+    this.sun.target.position.set(...sh.center);
+    this.sun.position.set(sh.center[0] + sh.offset[0], sh.center[1] + sh.offset[1], sh.center[2] + sh.offset[2]);
   }
 
   setupCars() {
@@ -227,7 +238,6 @@ export class Game {
       kicker: `#${r.number} · ${PRESETS[r.preset]?.role || 'Driver'} · Sky Circuit`,
       title: r.name,
       accent: r.primary,
-      body: '<p>Your character from the creator.</p>',
       actions: [
         ...['wave', 'thumbs', 'jump', 'akimbo'].map((id) => ({ label: EMOTES[id], onClick: () => setPose(root, id) })),
         { label: '✏️ Edit character', primary: true, onClick: () => (location.href = '/creator/') },
@@ -329,38 +339,6 @@ export class Game {
       });
     }
     const notWalking = () => !this.explorer?.active;
-    // Clicking anywhere on an island's ground walks you into that island.
-    const placeOf = { pit: 'pit', grandstand: 'grandstand', tower: 'tower', podium: 'podium' };
-    for (const isl of this.islands.children) {
-      const id = placeOf[isl.userData.islandId];
-      if (!id) continue;
-      I.add({
-        id: `island_${id}`,
-        kind: 'island',
-        hit: isl,
-        outline: [isl],
-        accent: '#F5C518',
-        anchor: isl.userData.anchor,
-        label: () => `🚶 ${PLACES[id].name} · click to walk in`,
-        enabled: notWalking,
-        onClick: () => this.walkInto(id),
-      });
-    }
-    // Grandstand island (the whole stand).
-    const gh = new THREE.Group();
-    Interactions.proxy(gh, 31, 10, 13, 5).position.z = -5;
-    this.grandstand.add(gh);
-    I.add({
-      id: 'grandstand',
-      kind: 'place',
-      hit: gh,
-      outline: [this.grandstand],
-      accent: '#F5C518',
-      anchor: this.grandstand,
-      label: () => '🏟 Grandstand · click to walk in',
-      enabled: notWalking,
-      onClick: () => this.walkInto('grandstand'),
-    });
     // Pit building (upper floor and roof, so garages below stay clickable).
     const pitHit = new THREE.Group();
     pitHit.position.set(0, 0, GARAGE_FRONT_Z - GARAGE_DEPTH / 2);
@@ -377,17 +355,56 @@ export class Game {
       enabled: notWalking,
       onClick: () => this.walkInto('pit'),
     });
+    this.registerVenue(this.circuits.sky);
+  }
+
+  // Hover and click on a circuit's islands and landmarks (only while it shows).
+  registerVenue(c) {
+    const I = this.interactions;
+    const notWalking = () => !this.explorer?.active && this.circuit === c;
+    // Clicking anywhere on an island's ground walks you into that island.
+    const placeOf = { pit: 'pit', grandstand: 'grandstand', tower: 'tower', podium: 'podium' };
+    for (const isl of c.islands.children) {
+      const id = placeOf[isl.userData.islandId];
+      if (!id) continue;
+      I.add({
+        id: `island_${c.id}_${id}`,
+        kind: 'island',
+        hit: isl,
+        outline: [isl],
+        accent: '#F5C518',
+        anchor: isl.userData.anchor,
+        label: () => `🚶 ${PLACES[id].name} · click to walk in`,
+        enabled: notWalking,
+        onClick: () => this.walkInto(id),
+      });
+    }
+    // Grandstand island (the whole stand).
+    const gh = new THREE.Group();
+    Interactions.proxy(gh, 31, 10, 13, 5).position.z = -5;
+    c.grandstand.add(gh);
+    I.add({
+      id: `grandstand_${c.id}`,
+      kind: 'place',
+      hit: gh,
+      outline: [c.grandstand],
+      accent: '#F5C518',
+      anchor: c.grandstand,
+      label: () => '🏟 Grandstand · click to walk in',
+      enabled: notWalking,
+      onClick: () => this.walkInto('grandstand'),
+    });
     // Watch tower.
     const th = new THREE.Group();
     Interactions.proxy(th, 12, 34, 12, 17);
-    this.tower.add(th);
+    c.tower.add(th);
     I.add({
-      id: 'tower',
+      id: `tower_${c.id}`,
       kind: 'tower',
       hit: th,
-      outline: [this.tower],
+      outline: [c.tower],
       accent: '#F5C518',
-      anchor: this.tower,
+      anchor: c.tower,
       label: () => '🗼 Watch tower · click to walk in',
       enabled: notWalking,
       onClick: () => this.walkInto('tower'),
@@ -395,14 +412,14 @@ export class Game {
     // Podium.
     const ph = new THREE.Group();
     Interactions.proxy(ph, 17, 12, 13, 6).position.z = -3;
-    this.podium.add(ph);
+    c.podium.add(ph);
     I.add({
-      id: 'podium',
+      id: `podium_${c.id}`,
       kind: 'podium',
       hit: ph,
-      outline: [this.podium],
+      outline: [c.podium],
       accent: '#F5C518',
-      anchor: this.podium,
+      anchor: c.podium,
       label: () => '🏆 Podium · click to walk in',
       enabled: notWalking,
       onClick: () => this.walkInto('podium'),
@@ -462,72 +479,58 @@ export class Game {
     );
   }
 
-  // Which islands the main page shows: 'sky' (the Sky Circuit) or 'dawn'
-  // (Caspian Dawn, to look round; driving and the rest stay as they are).
-  setWorld(id) {
-    if (id === this.world) return;
+  // Which circuit the main page shows: 'sky' or 'dawn' (built on first visit).
+  setWorld(id, then) {
+    if (id === this.world) return then?.();
     if (this.player.active || this.explorer.active || this.engineer.active || this.pitChallenge.active) {
       this.ui.toast('Finish what you are doing first.', { icon: '⏳' });
       return;
     }
     const apply = () => {
-      this.world = id;
       this.trackChoice = id;
       this.ui.closeModal();
       this.ui.hideCard();
       this.ui.hideTag();
       this.interactions.setHover(null);
       if (this.liveryView) this.exitLiveryView();
-      const rig = this.rig;
-      this.skyHome ||= rig.home;
-      if (id === 'dawn') {
-        this.circuit('dawn').show();
-        this.interactions.enabled = false; // the Sky Circuit's people and cars are hidden
-        rig.controls.maxDistance = 720;
-        rig.home = { target: new THREE.Vector3(0, 0, 25), distance: 560, azimuth: deg(35), elevation: deg(34) };
-      } else {
-        this.dawn?.hide();
-        this.interactions.enabled = true;
-        rig.controls.maxDistance = 330;
-        rig.home = this.skyHome;
-      }
+      this.useCircuit(this.circuitFor(id));
       this.worldBtns?.forEach((b, i) => b.setAttribute('aria-pressed', String(WORLDS[i].id === id)));
       document.body.dataset.world = id;
       this.goHome();
+      then?.();
     };
-    if (id === 'dawn' && !this.dawn) {
+    if (!this.circuits[id]) {
       this.ui.toast('Loading Caspian Dawn…', { icon: '🌅', duration: 1500 });
-      setTimeout(apply, 60);
+      setTimeout(apply, 60); // let the toast paint before building
     } else apply();
   }
 
-  // Track 2 is built the first time someone drives it.
-  circuit(id) {
-    if (id !== 'dawn') return this.homeCircuit;
-    this.dawn ||= new DawnCircuit(this);
-    return this.dawn;
+  circuitFor(id) {
+    if (!this.circuits[id] && id === 'dawn') {
+      const c = new DawnCircuit();
+      this.hdTextures?.(c.venue);
+      c.venue.visible = false;
+      this.circuits.dawn = c;
+      this.registerVenue(c);
+    }
+    return this.circuits[id] || this.circuits.sky;
   }
 
   driveCar(team, trackId = this.world) {
     if (this.player.active) return;
-    // Driving the Sky Circuit from the Caspian Dawn view: switch back first.
-    if (trackId === 'sky' && this.world !== 'sky') this.setWorld('sky');
     if (team.garageCar.drive?.mode !== 'parked') {
-      this.ui.toast('That car is already out. Try the other one.', { icon: '⏳' });
+      this.ui.toast('That car is already out. Try another one.', { icon: '⏳' });
       return;
     }
     this.ui.closeModal();
     this.ui.hideCard();
     this.ui.hideTag();
     this.interactions.setHover(null);
-    this.interactions.enabled = false;
-    if (trackId === 'dawn' && !this.dawn) {
-      // First visit: let the toast paint before building the world.
-      this.ui.toast('Loading Caspian Dawn…', { icon: '🌅', duration: 1500 });
-      setTimeout(() => this.player.start(team, this.circuit(trackId)), 60);
-      return;
-    }
-    this.player.start(team, this.circuit(trackId));
+    // Drive on the chosen circuit: switch to it first if it isn't showing.
+    this.setWorld(trackId, () => {
+      this.interactions.enabled = false;
+      this.player.start(team, this.circuit);
+    });
   }
 
   walkInto(id) {
@@ -581,10 +584,7 @@ export class Game {
       kicker: `${t.name} · ${status}`,
       title: `Car #${car.number}`,
       accent: t.primary,
-      body: `<p>${d ? `Driver: <b>${d.name}</b> (${d.from})` : 'Garage display piece'}.</p>
-        <p>Tires: <span class="chip" style="box-shadow: inset 0 0 0 2px ${tire.hex}">${tire.name}</span> · Livery: ${motifName(t.motif)}</p>
-        <div class="swatches" aria-label="Team colors">${[t.primary, t.secondary, t.accent].map((c) => `<span class="swatch" style="background:${c}" title="${c}"></span>`).join('')}</div>
-        ${car.drive?.lastLap ? `<p>Last lap <b>${car.drive.lastLap.toFixed(2)} s</b></p>` : ''}`,
+      body: `<p>${d ? `<b>${d.name}</b> · ` : ''}<span class="chip" style="box-shadow: inset 0 0 0 2px ${tire.hex}">${tire.name}</span>${car.drive?.lastLap ? ` · <b>${car.drive.lastLap.toFixed(2)} s</b>` : ''}</p>`,
       actions,
     });
   }
@@ -601,7 +601,6 @@ export class Game {
         kicker: `${car.teamRef.data.name} · Livery viewer`,
         title: `Car #${car.number}`,
         accent: car.teamRef.data.primary,
-        body: '<p>Drag to orbit, scroll or pinch to zoom.</p>',
         actions: [
           { label: flapOpen() ? 'Close rear flap' : 'Open rear flap', pressed: flapOpen(), onClick: () => { car.nodes.flapR.rotation.x = flapOpen() ? 0 : deg(60); rebuild(); } },
           { label: `Tires: ${tire.name}`, onClick: () => { car.setAllCompounds(compounds[(compounds.indexOf(car.compounds.FL) + 1) % compounds.length]); rebuild(); } },
@@ -685,8 +684,7 @@ export class Game {
       kicker: `#${d.data.number} · ${t.name} · ${d.data.from}`,
       title: d.data.name,
       accent: t.primary,
-      body: `<p><i>“${d.data.line}.”</i></p>
-        <p>Signature celebration: <b>${d.data.celebration}</b> ${unlocked ? '' : '<span class="chip">🔒 unlocks after a podium</span>'}</p>`,
+      body: unlocked ? '' : '<p><span class="chip">🔒 Celebration</span></p>',
       actions: [
         { label: '👋 Wave', onClick: emote('wave') },
         { label: '🎨 Style', primary: true, onClick: () => this.showStyler([d.standing.person, d.seated.person], { title: d.data.name, kicker: `#${d.data.number} · ${t.name}`, accent: t.primary, back: () => this.showDriverCard(d), focus: () => this.focusDriver(d) }) },
@@ -722,13 +720,12 @@ export class Game {
     const e = team.crew.engineer;
     this.focusView(e.root.position.clone().add(V(0, 1.2, 0)), { distance: 6, elevation: 22, azimuth: e.root.rotation.y + 0.4 });
     e.anim.play('point_at_screen');
-    const tip = TIPS[Math.floor(Math.random() * TIPS.length)];
     this.ui.toast(`<b>Engineer:</b> ${tip}`, { icon: '🎧', accent: team.data.primary, duration: 5000 });
     this.ui.showCard({
       kicker: `${team.data.name} · Race engineer`,
       title: 'On the radio',
       accent: team.data.primary,
-      body: `<p>${tip}</p><p>Next stop: <b>${COMPOUNDS[this.nextCompound[team.data.id]].name}</b> tires. Car #${team.trackCar.number} is on track.</p>`,
+      body: `<p>Next tires: <b>${COMPOUNDS[this.nextCompound[team.data.id]].name}</b></p>`,
       actions: [
         { label: 'Start pit stop challenge', primary: true, onClick: () => this.pitChallenge.start(team) },
         { label: '🎨 Style', onClick: () => this.showStyler([e.person], { title: 'Race engineer', kicker: team.data.name, accent: team.data.primary, back: () => this.focusEngineer(team) }) },
@@ -796,7 +793,6 @@ export class Game {
       kicker: `${kicker} · Style`,
       title,
       accent,
-      body: '<p>Changes show up right away and stay in this browser.</p>',
       extra: h('div', { class: 'styler' }, rows),
       actions: [{ label: 'Done', primary: true, onClick: back }],
     });
@@ -824,7 +820,6 @@ export class Game {
       kicker: `${team.data.name} · 11 on the pit crew`,
       title: 'Pit crew',
       accent: team.data.primary,
-      body: '<p>Front and rear jack, four wheel gunners, four tire changers and a release controller. Their whole job is 2.4 seconds.</p>',
       actions: [
         { label: 'Pit stop challenge', primary: true, onClick: () => this.pitChallenge.start(team) },
         { label: '🎨 Team kit', onClick: () => this.showStyler(team.pitCrew.map((a) => a.person), { title: 'Pit crew kit', kicker: team.data.name, accent: team.data.primary, back: () => this.focusCrew(team), kit: true }) },
@@ -888,7 +883,6 @@ export class Game {
       kicker: 'Area',
       title: place.name,
       accent: '#F5C518',
-      body: `<p>${place.blurb}</p>`,
       actions: [
         { label: '🚶 Walk in', primary: true, onClick: () => this.explorer.enter(id) },
         ...(id === 'pit' ? this.teams.filter((t) => t.launch).map((t) => ({ label: `${t.data.name} crew`, onClick: () => this.focusCrew(t) })) : []),
@@ -927,7 +921,7 @@ export class Game {
       kicker: 'Podium',
       title: 'Celebrate',
       accent: '#F5C518',
-      body: `<p>${last ? `Last podium: ${last.map((n, i) => `${i + 1}. ${driverByNumber(n).name}`).join(' · ')}` : 'Pick who stands on steps 1 to 3. The winner sprays champagne.'}</p>`,
+      body: last ? `<p>${last.map((n, i) => `${i + 1}. ${surname(driverByNumber(n).name)}`).join(' · ')}</p>` : '',
       actions: [
         { label: '🚶 Walk in', primary: true, onClick: () => this.explorer.enter('podium') },
         { label: 'Choose the podium', onClick: () => this.choosePodium() },
@@ -1065,7 +1059,6 @@ export class Game {
         'div',
         {},
         h('h2', {}, 'Pit stop challenge'),
-        h('p', {}, `The car boxes, then tap the four corners in the order shown. Guns off, tires swapped, guns on, jacks down, green light. Beat ${PIT.target.toFixed(1)} s.`),
         loadBest() ? h('p', {}, `Your best: ${loadBest().time.toFixed(2)} s`) : null,
         h('div', { class: 'row' }, launch.map((t) => h('button', { class: 'primary', style: { background: t.data.primary, borderColor: t.data.primary }, onclick: () => { this.ui.closeModal(); this.pitChallenge.start(t); } }, t.data.name)), h('button', { onclick: () => this.ui.closeModal() }, 'Cancel'))
       );
@@ -1085,7 +1078,6 @@ export class Game {
         'div',
         {},
         h('h2', {}, 'Drive a car'),
-        h('p', {}, 'Take a car out for a lap from the cockpit. W/↑ go, S/↓ brake, A/D steer, Space for DRS, C to change camera.'),
         h('p', { class: 'play-label' }, 'Track'),
         this.trackPicker(),
         h('p', { class: 'play-label' }, 'Car'),
@@ -1099,8 +1091,7 @@ export class Game {
         'div',
         {},
         h('h2', {}, 'Walk in'),
-        h('p', {}, 'Pick an island to explore on foot.'),
-        h('div', { class: 'place-list' }, Object.entries(PLACES).map(([id, p]) => h('button', { class: 'place', onclick: () => { this.ui.closeModal(); this.explorer.enter(id); } }, h('b', {}, p.name), h('span', {}, p.blurb)))),
+        h('div', { class: 'place-list' }, Object.entries(PLACES).map(([id, p]) => h('button', { class: 'place', onclick: () => { this.ui.closeModal(); this.explorer.enter(id); } }, h('b', {}, p.name)))),
         h('div', { class: 'row' }, h('button', { onclick: () => this.ui.closeModal() }, 'Cancel'))
       );
       this.ui.openModal(content);
@@ -1132,11 +1123,6 @@ export class Game {
       h('button', { 'aria-pressed': String(w.id === this.world), 'data-tip': w.tip, onclick: () => this.setWorld(w.id) }, h('span', { class: 'world-swatch', style: { background: w.swatch }, 'aria-hidden': 'true' }), h('span', { class: 'world-name' }, w.name))
     );
     this.ui.root.append(h('div', { class: 'world-switch', role: 'group', 'aria-label': 'Islands' }, ...this.worldBtns));
-    // Pit stops, the podium, walking in, rain and the crew jobs happen on the
-    // Sky Circuit: from Caspian Dawn they bring you back there first.
-    for (const id of ['btn-pit', 'btn-podium', 'btn-explore', 'btn-rain']) {
-      document.getElementById(id)?.addEventListener('click', () => this.world !== 'sky' && this.setWorld('sky'), { capture: true });
-    }
     document.getElementById('btn-help').addEventListener('click', () => {
       this.ui.openModal(
         h(
@@ -1164,8 +1150,8 @@ export class Game {
   trackPicker() {
     this.trackChoice ||= this.world;
     const tracks = [
-      { id: 'sky', name: 'Sky Circuit', blurb: 'Track 1 · the home circuit: pit lane, grandstand, four islands. Midday.', swatch: 'linear-gradient(135deg,#74BDF0,#A6D6F7)' },
-      { id: 'dawn', name: 'Caspian Dawn', blurb: 'Track 2 · inspired by Baku: an old-city climb, a horseshoe, a waterfall to drive through and a DRS boulevard. The high bridge crosses over the low one. At dawn.', swatch: 'linear-gradient(135deg,#2C3F82,#F2A48E 60%,#FFD39A)' },
+      { id: 'sky', name: 'Sky Circuit', swatch: 'linear-gradient(135deg,#74BDF0,#A6D6F7)' },
+      { id: 'dawn', name: 'Caspian Dawn', swatch: 'linear-gradient(135deg,#2C3F82,#F2A48E 60%,#FFD39A)' },
     ];
     const row = h('div', { class: 'track-pick', role: 'radiogroup', 'aria-label': 'Track' });
     const render = () =>
@@ -1175,8 +1161,7 @@ export class Game {
             'button',
             { role: 'radio', 'aria-checked': String(this.trackChoice === t.id), class: 'track-card', onclick: () => ((this.trackChoice = t.id), render()) },
             h('span', { class: 'track-swatch', style: { background: t.swatch }, 'aria-hidden': 'true' }),
-            h('b', {}, t.name),
-            h('span', {}, t.blurb)
+            h('b', {}, t.name)
           )
         )
       );
@@ -1188,12 +1173,10 @@ export class Game {
     this.rain = on;
     this.rainFx.lines.visible = on;
     for (const t of this.teams) for (const c of t.cars) if (c.drive) c.drive.rain = on;
-    this.hemi.intensity = on ? 0.75 : 1.05;
-    this.sun.intensity = on ? 1.3 : 2.6;
-    this.post.grade.uniforms.saturation.value = on ? 0.88 : 1.02;
+    this.applyLight();
     if (on) {
       for (const t of this.teams.filter((x) => x.launch)) this.nextCompound[t.data.id] = 'intermediate';
-      this.ui.toast('Rain! Strategists switched the next stop to intermediates.', { icon: '🌧', accent: '#2D7FF9' });
+      this.ui.toast('Rain! Next stop: intermediates.', { icon: '🌧', accent: '#2D7FF9' });
     }
   }
 
@@ -1226,7 +1209,7 @@ export class Game {
     this.pitChallenge.update(dt);
     this.engineer.update(dt);
     this.explorer.update(dt);
-    if (this.world === 'dawn' && !this.player.active) this.dawn?.update(dt);
+    this.circuit.update?.(dt, this, this.player.active ? this.player : null);
     this.audio.update(this.explorer.active || this.player.active || this.engineer.active || !!this.pitChallenge.fp);
     this.updateCelebration(dt);
     this.particles.update(dt);
@@ -1262,9 +1245,6 @@ export class Game {
   }
 }
 
-function motifName(m) {
-  return { rays: 'Sun rays', waves: 'Aurora wave', chevrons: 'Feather chevrons', pinstripes: 'Pinstripes and roundel', grid: 'Technical grid' }[m] || m;
-}
 
 function loadUnlocked() {
   try {
