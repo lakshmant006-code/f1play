@@ -183,8 +183,9 @@ Covers build-order steps 1 to 3 and most of 4 and 5 from the spec:
 ## Analytics
 
 Google Analytics 4 is wired into every page (game, cards, creator, Learn).
-The Measurement ID is `G-R3LKFK10D5` (the Celestera web stream); a
-`VITE_GA4_ID` environment variable overrides it. Nothing loads on localhost. Besides page views, the game sends `select_track`,
+Google's tag for the Celestera web stream (`G-R3LKFK10D5`) is pasted at the
+top of each page's `<head>`, and `src/analytics.js` sends game events through
+it. Besides page views, the game sends `select_track`,
 `drive_start`, `lap_complete` (track, team, lap time, personal best),
 `pit_stop` (stop time), `play_as` (role), `sign_up` and, from the creator,
 `character_saved`.

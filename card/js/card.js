@@ -4,7 +4,6 @@
 // art slides inside its panel and the page background drifts the other way.
 
 import { TEAMS, DRIVERS } from '../../src/data.js';
-import { initAnalytics } from '../../src/analytics.js';
 import { loadRecipe, PRESETS } from '../../src/character/recipe.js';
 import car4 from '../images/car-4.png';
 import car8 from '../images/car-8.png';
@@ -12,7 +11,6 @@ import car11 from '../images/car-11.png';
 import car6 from '../images/car-6.png';
 import car3 from '../images/car-3.png';
 
-initAnalytics();
 
 const ART = { 4: car4, 8: car8, 11: car11, 6: car6, 3: car3 };
 

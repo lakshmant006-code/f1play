@@ -4,7 +4,7 @@
 // snapshot, which become the player's card and their character in the paddock.
 
 import * as THREE from 'three';
-import { initAnalytics, track } from '../src/analytics.js';
+import { track } from '../src/analytics.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
@@ -14,7 +14,6 @@ import {
 } from '../src/character/blocky.js';
 import { DRIVERS } from '../src/data.js';
 
-initAnalytics();
 
 const $ = (id) => document.getElementById(id);
 const TAKEN = new Set(DRIVERS.map((d) => d.number)); // roster numbers are reserved
