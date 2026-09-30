@@ -5,6 +5,7 @@
 //   engineer  runs the lapping car from the pit wall over the radio.
 
 import { h } from '../ui/ui.js';
+import { track } from '../analytics.js';
 import { loadRecipe, DEFAULT_RECIPE, PRESETS } from '../character/recipe.js';
 
 export const ROLES = {
@@ -72,6 +73,7 @@ export class RolePlay {
     g.ui.closeModal();
     const { recipe } = this.character();
     this.role = role;
+    track('play_as', { role });
     if (role === 'driver') this.playDriver(team, recipe);
     else if (role === 'mechanic') this.playMechanic(team, recipe);
     else if (role === 'engineer') this.playEngineer(team, recipe);

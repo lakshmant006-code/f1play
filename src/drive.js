@@ -14,6 +14,7 @@ import { CAR } from './car/car.js';
 import { TRACK_WIDTH, PIT_WALL_Z } from './game/layout.js';
 import { h } from './ui/ui.js';
 import { deg } from './geo.js';
+import { track } from './analytics.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const BEST_KEY = 'skycircuit.bestLap';
@@ -194,6 +195,7 @@ export class PlayerDrive {
     g.ui.back.hidden = true;
     document.body.classList.add('walking', 'driving');
     circuit.enter?.(this);
+    track('drive_start', { track: circuit.id, team: team.data.id });
     this.setCam('cockpit');
     this.buildHud();
     g.audio?.start();
@@ -620,6 +622,7 @@ export class PlayerDrive {
       this.bestLap = { time: t, number: this.car.number, date: new Date().toISOString() };
       saveBestLap(this.bestLap, this.circuit.bestKey);
     }
+    track('lap_complete', { track: this.circuit.id, team: this.team.data.id, lap_time: Number(t.toFixed(2)), personal_best: isBest });
     g.ui.toast(`Lap ${t.toFixed(2)} s${isBest ? ' · new best!' : ''}`, { icon: '⏱', accent: this.team.data.primary, duration: 2500 });
   }
 

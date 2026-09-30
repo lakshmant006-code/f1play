@@ -8,6 +8,9 @@ import { initLanding } from './landing.js';
 import { initMenu } from './ui/menu.js';
 import { initTopbar } from './ui/topbar.js';
 import { SCENERY } from './data.js';
+import { initAnalytics } from './analytics.js';
+
+initAnalytics();
 
 const canvas = document.getElementById('scene');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });

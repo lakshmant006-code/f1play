@@ -7,6 +7,7 @@ import { GRID as TEAMS } from './data.js';
 import { h } from './ui/ui.js';
 import { icon } from './ui/icons.js';
 import { loadRecipe } from './character/recipe.js';
+import { track } from './analytics.js';
 
 const PLAYER_KEY = 'skycircuit.player';
 const ENTERED_KEY = 'skycircuit.entered'; // set once per browser session
@@ -126,6 +127,7 @@ export function initLanding(game) {
           }
           player = { name: n, team, since: player?.since || new Date().toISOString() };
           savePlayer(player);
+          track('sign_up', { method: 'player_name' });
           renderChip();
           hide(`Welcome, ${n}!`);
         },

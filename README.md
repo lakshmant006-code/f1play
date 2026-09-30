@@ -180,6 +180,16 @@ Covers build-order steps 1 to 3 and most of 4 and 5 from the spec:
   strategists, podium picks with champagne. Tab/Enter/Escape work everywhere,
   touch uses tap and long press, and reduced motion swaps glides for fades.
 
+## Analytics
+
+Google Analytics 4 is wired into every page (game, cards, creator, Learn).
+Set the Measurement ID as the `VITE_GA4_ID` environment variable (in Vercel:
+Project Settings → Environment Variables, e.g. `G-XXXXXXXXXX`) and redeploy.
+Without it nothing loads. Besides page views, the game sends `select_track`,
+`drive_start`, `lap_complete` (track, team, lap time, personal best),
+`pit_stop` (stop time), `play_as` (role), `sign_up` and, from the creator,
+`character_saved`.
+
 ## Driver cards
 
 `/card/` is a collectible card page built from the Figma export (`card/css/main.css`
