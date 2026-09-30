@@ -308,6 +308,7 @@ export class DawnCircuit {
     this.water = waterMaterial();
     this.led = ledMaterial();
     this.build(outlines);
+    game.hdTextures?.(this.group);
   }
 
   // How far the car's centre can go from the centreline before it meets the barrier.
@@ -334,6 +335,8 @@ export class DawnCircuit {
     const g = this.group;
     const sky = dawnSky();
     sky.userData.shadow = false;
+    sky.frustumCulled = false;
+    this.sky = sky; // kept centred on the camera, so zoomed out it never clips
     g.add(sky);
     this.clouds = buildClouds(rng(33));
     this.clouds.traverse((o) => (o.userData.shadow = false));
@@ -373,7 +376,8 @@ export class DawnCircuit {
     const roadMesh = new THREE.Mesh(road, asphalt);
     roadMesh.userData.shadow = false;
     g.add(roadMesh);
-    const white = mat('#F2F2EE', { roughness: 0.6 });
+    // Paint sits a few mm over the asphalt: a depth offset keeps it crisp from far away.
+    const white = mat('#F2F2EE', { roughness: 0.6, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
     const lines = [];
     for (const side of [1, -1]) lines.push(faceUp(strip(F, (f) => [[side * (f.hw - 0.23), f.p.y + 0.045], [side * (f.hw - 0.47), f.p.y + 0.045]], { closed: true })));
     const lineMesh = new THREE.Mesh(merge(lines), white);
@@ -402,7 +406,7 @@ export class DawnCircuit {
         );
       }
     }
-    const kerbMesh = new THREE.Mesh(merge(kerbs, { color: true }), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, side: THREE.DoubleSide }));
+    const kerbMesh = new THREE.Mesh(merge(kerbs, { color: true }), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }));
     kerbMesh.userData.shadow = false;
     g.add(kerbMesh);
 
@@ -479,7 +483,8 @@ export class DawnCircuit {
     const bottom = (f) => (f.island ? (f.p.y > 3.2 ? f.p.y - 1.4 : -0.9) : f.p.y - 1.8);
     const body = strip(F, (f) => [[f.E, f.p.y - 0.02], [f.E, bottom(f)], [-f.E, bottom(f)], [-f.E, f.p.y - 0.02]], { closed: true });
     g.add(new THREE.Mesh(body, mat('#CDB799', { roughness: 0.9, side: THREE.DoubleSide })));
-    const paving = faceUp(strip(F, (f) => [[f.E, f.p.y + 0.012], [-f.E, f.p.y + 0.012]], { closed: true }));
+    // Paving only beside the road (not under it, where the two would flicker from afar).
+    const paving = merge([1, -1].map((side) => faceUp(strip(F, (f) => [[side * f.E, f.p.y + 0.012], [side * (f.hw - 0.05), f.p.y + 0.012]], { closed: true }))));
     const pave = new THREE.Mesh(paving, mat('#B9AE9E', { roughness: 0.9 }));
     pave.userData.shadow = false;
     g.add(pave);
@@ -917,12 +922,17 @@ export class DawnCircuit {
 
   // ---- Enter / leave / update ---------------------------------------------------------------
 
-  enter(player) {
+  // Show this world in place of the Sky Circuit: its scenery hidden (except
+  // `keep`), the dawn light and fog on. Used both for driving and for just
+  // looking round the islands from the main page.
+  show(keep = []) {
+    if (this.shown) return;
+    this.shown = true;
     const game = this.game;
     const scene = game.scene;
     if (!this.group.parent) scene.add(this.group);
-    const keep = new Set([this.group, game.particles.points, game.hemi, game.sun, game.sun.target, player.car.root]);
-    this.hidden = scene.children.filter((o) => o.visible && !keep.has(o) && !o.isLight);
+    const keepSet = new Set([this.group, game.particles.points, game.hemi, game.sun, game.sun.target, ...keep]);
+    this.hidden = scene.children.filter((o) => o.visible && !keepSet.has(o) && !o.isLight);
     this.hidden.forEach((o) => (o.visible = false));
     this.group.visible = true;
     // Dawn light: a low, warm sun ahead down the boulevard, a pink sky fill.
@@ -956,22 +966,18 @@ export class DawnCircuit {
     scene.environmentIntensity = 0.42;
     scene.environmentRotation.set(0, Math.PI / 2, 0); // keeps the studio lights out of the nose reflection down the boulevard
     game.post.grade.uniforms.saturation.value = 1.08;
-    const sc = sun.shadow.camera;
-    sc.left = sc.bottom = -70;
-    sc.right = sc.top = 70;
-    sc.far = 700;
-    sc.updateProjectionMatrix();
-    this.passedWaterfall = false;
+    this.setShadow(false);
   }
 
-  exit() {
+  hide() {
+    if (!this.shown) return;
+    this.shown = false;
     const game = this.game;
     const scene = game.scene;
     this.group.visible = false;
     this.hidden?.forEach((o) => (o.visible = true));
     this.hidden = null;
     const s = this.saved;
-    if (!s) return;
     const sun = game.sun;
     sun.color.copy(s.sunColor);
     sun.intensity = s.sunI;
@@ -990,17 +996,63 @@ export class DawnCircuit {
     sc.updateProjectionMatrix();
     sun.position.copy(s.sunPos);
     sun.target.position.copy(s.target);
-    game.ui.root.querySelector('.splash-fx')?.remove();
-    document.body.classList.remove('drs-open');
     this.saved = null;
   }
 
-  update(dt, player) {
+  // Shadows: a tight box that follows the car while driving, or one box over
+  // both islands when looking round.
+  setShadow(follow) {
+    const sun = this.game.sun;
+    const sc = sun.shadow.camera;
+    const r = follow ? 70 : 250;
+    sc.left = sc.bottom = -r;
+    sc.right = sc.top = r;
+    sc.far = follow ? 700 : 1100;
+    sc.updateProjectionMatrix();
+    if (!follow) {
+      sun.target.position.set(0, 0, 30);
+      sun.position.copy(sun.target.position).addScaledVector(LIGHT_DIR, 520);
+    }
+  }
+
+  enter(player) {
+    this.show([player.car.root]);
+    this.player = player;
+    player.car.root.visible = true;
+    this.setShadow(true);
+    this.passedWaterfall = false;
+  }
+
+  // Leaving the car: back to looking round this world if the main page is
+  // showing it, otherwise back to the Sky Circuit.
+  exit() {
+    const game = this.game;
+    const car = this.player?.car;
+    this.player = null;
+    game.ui.root.querySelector('.splash-fx')?.remove();
+    document.body.classList.remove('drs-open');
+    if (game.world === this.id) {
+      if (car && this.hidden?.includes(car.root)) car.root.visible = false;
+      this.setShadow(false);
+    } else this.hide();
+  }
+
+  update(dt, player = this.player) {
     this.time += dt;
     const game = this.game;
     this.water.uniforms.time.value = this.time;
+    this.led.uniforms.time.value = this.time;
+    this.sky.position.copy(game.camera.position);
     this.clouds.userData.update?.(this.time);
-    this.stand.userData.update?.(this.time, player.drs ? 0.8 : 0.2);
+    this.stand.userData.update?.(this.time, player?.drs ? 0.8 : 0.2);
+    const cam = game.camera.position;
+    if (cam.distanceTo(this.mistAt[0]) < 160 && Math.random() < dt * 30) {
+      for (const m of this.mistAt) game.particles.emit({ pos: m, vel: V(0, 0.8, 0), color: ['#ffffff', '#e9f4fb', '#f7e6df'], life: 1.4, size: 1.1, gravity: 0.2, drag: 1.2, spread: 2.2, count: 2, jitter: 5 });
+    }
+    if (!player) {
+      this.led.uniforms.state.value = 0;
+      return;
+    }
     // Shadows follow the car.
     const sun = game.sun;
     sun.target.position.copy(player.pos);
@@ -1010,7 +1062,6 @@ export class DawnCircuit {
     // DRS lights and panels.
     const inZone = this.inDrs(player.s);
     const state = player.drs ? 2 : inZone && player.v > 18 ? 1 : 0;
-    this.led.uniforms.time.value = this.time;
     this.led.uniforms.state.value = state;
     this.led.uniforms.carS.value = player.s;
     for (const p of this.panels) {
@@ -1021,11 +1072,7 @@ export class DawnCircuit {
       }
     }
     document.body.classList.toggle('drs-open', !!player.drs);
-    // The waterfall: mist always, and a soaking when you drive through.
-    const cam = game.camera.position;
-    if (cam.distanceTo(this.mistAt[0]) < 160 && Math.random() < dt * 30) {
-      for (const m of this.mistAt) game.particles.emit({ pos: m, vel: V(0, 0.8, 0), color: ['#ffffff', '#e9f4fb', '#f7e6df'], life: 1.4, size: 1.1, gravity: 0.2, drag: 1.2, spread: 2.2, count: 2, jitter: 5 });
-    }
+    // Driving through the waterfall soaks you.
     const through = this.nearWaterfall(player.s, 2.5) && Math.abs(player.lat ?? 0) < this.waterfallFrame.E;
     if (through && !this.passedWaterfall) this.splash(player);
     if (!this.nearWaterfall(player.s, 12)) this.passedWaterfall = false;

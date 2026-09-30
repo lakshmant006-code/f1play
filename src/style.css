@@ -518,3 +518,18 @@ body.drs-open #ui::before {
   .splash-fx, .splash-fx i, body.drs-open #ui::before { animation: none; }
   .splash-fx { display: none; }
 }
+
+/* Island switcher: bottom left, the same white capsule as the view controls. */
+.world-switch { position: absolute; left: 16px; bottom: max(16px, env(safe-area-inset-bottom)); display: flex; gap: 4px; padding: 6px; border-radius: 22px; background: rgba(255, 255, 255, 0.94); box-shadow: 0 6px 18px rgba(14, 27, 43, 0.12); }
+.world-switch button { position: relative; display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 14px 0 8px; border: none; border-radius: 14px; background: transparent; color: #111317; box-shadow: none; font-weight: 800; }
+.world-switch button:hover { background: #f0f1f3; }
+.world-switch button[aria-pressed='true'] { background: #e6e8ec; }
+.world-swatch { width: 28px; height: 28px; border-radius: 9px; box-shadow: inset 0 0 0 1px rgba(14, 27, 43, 0.12); }
+.world-switch [data-tip]:hover::after { top: auto; bottom: calc(100% + 10px); }
+body.walking .world-switch, body.driving .world-switch, body.landing-on .world-switch, body.eng-mode .world-switch, body.pit-fp .world-switch { display: none; }
+body:has(.hud.pit:not([hidden])) .world-switch { display: none; }
+/* Phones: names hidden, just the two swatches. */
+@media (max-width: 700px) {
+  .world-switch .world-name { display: none; }
+  .world-switch button { padding: 0 8px; }
+}
