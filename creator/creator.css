@@ -225,3 +225,10 @@ button.primary {
     grid-template-columns: repeat(3, 1fr);
   }
 }
+
+/* Phones: the two links share the top row, the title drops below them. */
+.pill { white-space: nowrap; }
+@media (max-width: 480px) {
+  .bar { flex-wrap: wrap; row-gap: 8px; }
+  .bar h1 { order: 1; flex-basis: 100%; font-size: 22px; }
+}

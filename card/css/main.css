@@ -85,6 +85,8 @@ body {
   height: 494px;
   perspective: 1100px;
   scale: var(--fit, 1); /* set from JS so the card fits short screens */
+  /* scale doesn't shrink the layout box, so pull the edges in to match */
+  margin: calc((var(--fit, 1) - 1) * 247px) calc((var(--fit, 1) - 1) * 177px);
   position: relative;
   z-index: 1;
 }
@@ -394,4 +396,23 @@ body {
 }
 .mine .card-no::before {
   content: '★ ';
+}
+
+/* Phones: shorter labels, so the two links never overlap. */
+.back-link { white-space: nowrap; }
+.back-link .narrow { display: none; }
+@media (max-width: 560px) {
+  .back-link { top: 14px; left: 14px; font-size: 14px; padding: 8px 12px; }
+  .back-link.creator-link { right: 14px; }
+  .back-link .wide { display: none; }
+  .back-link .narrow { display: inline; }
+}
+/* Short landscape phones: no minimum height, and the arrows sit either side
+   of the card instead of under it. */
+@media (max-height: 500px) and (orientation: landscape) {
+  .v6_8 { min-height: 0; }
+  .card-nav { bottom: auto; top: 50%; left: 16px; right: 16px; translate: 0 -50%; justify-content: space-between; pointer-events: none; }
+  .card-nav > * { pointer-events: auto; }
+  .card-nav #count { display: none; }
+  .v6_8 { padding-top: 44px; }
 }
