@@ -148,8 +148,11 @@ window.addEventListener('keydown', (e) => {
 });
 
 function fit() {
-  const s = Math.min(1, (window.innerHeight - 130) / 494, (window.innerWidth - 32) / 354);
-  document.querySelector('.card-scene').style.setProperty('--fit', Math.max(0.5, s).toFixed(3));
+  // Short landscape screens put the arrows beside the card, so it can use more height.
+  const shortLandscape = window.innerHeight <= 500 && window.innerWidth > window.innerHeight;
+  const room = shortLandscape ? window.innerHeight - 70 : window.innerHeight - 130;
+  const s = Math.min(1, room / 494, (window.innerWidth - 32) / 354);
+  document.querySelector('.card-scene').style.setProperty('--fit', Math.max(0.4, s).toFixed(3));
 }
 window.addEventListener('resize', fit);
 fit();
