@@ -109,6 +109,12 @@ Covers build-order steps 1 to 3 and most of 4 and 5 from the spec:
   upshifts and blips on downshifts (with a crackle for your own car), a
   crowd bed, and splash and thud effects. On phones and iPads it starts on
   the first tap and plays even with the silent switch on.
+- **Welcome music**: ethereal music on the landing screen, composed live
+  with Web Audio. Slow airy chords in D, glassy bells drifting through an
+  echo, and a breath of wind, all under a long reverb. It fades in on the
+  landing screen and out when you enter. Browsers allow sound only after a
+  tap, click or key, so on a first visit it starts at the first touch. The
+  note button on the card mutes it, and the choice is remembered.
 - **Scenery detail** (both circuits): grandstands in board-formed concrete
   with lit roof undersides and a crowd of fans (shoulders, hair or caps, arms
   up and waving, mostly in their section's team colour); palm trees with
@@ -268,5 +274,6 @@ src/character/         blocky character: recipe.js (options, presets, saving), b
 src/drive.js           drive mode: physics, cockpit/T-cam/chase cameras, wheel display, laps
 src/explore.js         walk mode: places, viewpoints, walkable surfaces, collisions
 src/audio.js           procedural engine and crowd sound
+src/music.js           ethereal welcome music for the landing screen
 src/interact.js        hover, click, keyboard and touch
 ```

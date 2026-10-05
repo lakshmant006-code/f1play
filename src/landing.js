@@ -8,6 +8,7 @@ import { h } from './ui/ui.js';
 import { icon } from './ui/icons.js';
 import { loadRecipe } from './character/recipe.js';
 import { track } from './analytics.js';
+import { LandingMusic } from './music.js';
 
 const PLAYER_KEY = 'skycircuit.player';
 const ENTERED_KEY = 'skycircuit.entered'; // set once per browser session
@@ -89,10 +90,24 @@ export function initLanding(game) {
   }
   window.addEventListener('resize', () => shifted && requestAnimationFrame(applyShift));
 
+  // Ethereal music while the landing screen is up, with an on/off button.
+  const music = new LandingMusic();
+  const musicBtn = h('button', { type: 'button', class: 'landing-music' });
+  const renderMusic = () => {
+    musicBtn.innerHTML = `<span class="ico" aria-hidden="true">${icon(music.on ? 'music' : 'musicOff')}</span>`;
+    musicBtn.setAttribute('aria-pressed', String(music.on));
+    musicBtn.setAttribute('aria-label', music.on ? 'Music on' : 'Music off');
+    musicBtn.title = music.on ? 'Music on' : 'Music off';
+  };
+  musicBtn.addEventListener('click', () => music.toggle());
+  music.onchange = renderMusic;
+  renderMusic();
+
   let el = null;
   function show() {
     if (el) return;
     document.body.classList.add('landing-on');
+    music.start();
     game.goHome?.();
     game.rig.setAutoRotate(true);
     shiftView(true);
@@ -160,7 +175,7 @@ export function initLanding(game) {
       h(
         'div',
         { class: 'landing-card' },
-        h('div', { class: 'landing-brand' }, h('span', { class: 'mark', 'aria-hidden': 'true' }), 'Sky Circuit'),
+        h('div', { class: 'landing-brand' }, h('span', { class: 'mark', 'aria-hidden': 'true' }), 'Sky Circuit', musicBtn),
         h('h1', { id: 'landing-title' }, 'Race above the clouds'),
         welcome || form,
       )
@@ -181,6 +196,7 @@ export function initLanding(game) {
     out.classList.add('out');
     setTimeout(() => out.remove(), 450);
     document.body.classList.remove('landing-on');
+    music.stop();
     setEntered(true);
     game.rig.setAutoRotate(false);
     shiftView(false);
