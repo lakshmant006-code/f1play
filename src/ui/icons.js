@@ -22,8 +22,10 @@ import up from '@material-symbols/svg-400/rounded/keyboard_arrow_up-fill.svg?raw
 import down from '@material-symbols/svg-400/rounded/keyboard_arrow_down-fill.svg?raw';
 import spin from '@material-symbols/svg-400/rounded/360-fill.svg?raw';
 import recenter from '@material-symbols/svg-400/rounded/center_focus_strong-fill.svg?raw';
+import music from '@material-symbols/svg-400/rounded/music_note-fill.svg?raw';
+import musicOff from '@material-symbols/svg-400/rounded/music_off-fill.svg?raw';
 
-const ICONS = { home, drive, play, walk, pit, podium, rain, cards, learn, help, menu, close, personAdd, face, timer, rotateLeft, rotateRight, up, down, spin, recenter };
+const ICONS = { home, drive, play, walk, pit, podium, rain, cards, learn, help, menu, close, personAdd, face, timer, rotateLeft, rotateRight, up, down, spin, recenter, music, musicOff };
 
 // SVG markup for an icon, sized by CSS (1em square, currentColor).
 export function icon(name) {

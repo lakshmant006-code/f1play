@@ -573,3 +573,10 @@ body:has(.hud.pit:not([hidden])) .world-switch { display: none; }
 /* While driving on a touch screen the dash owns the top of the screen. */
 body.touch-drive .top-left { display: none; }
 @media (min-width: 901px) { .card, .walk-hud { top: 86px; } }
+/* Music on/off on the landing card, top right. */
+.landing-music {
+  display: grid; place-items: center; width: 36px; height: 36px; margin-left: auto; padding: 0; border-radius: 50%;
+  background: rgba(255, 255, 255, 0.75); color: var(--ink); border: 1px solid var(--line); box-shadow: none;
+}
+.landing-music .ico { font-size: 20px; }
+.landing-music[aria-pressed='false'] { color: var(--ink-2); }
